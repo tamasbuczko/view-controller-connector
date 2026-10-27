@@ -179,3 +179,13 @@ Rögzített döntések ADR stílusban. Ha egy döntés változik, itt frissítj�
 | **Döntés** | A `demo-php` + `@vcc/ui` követi a [demo-ux.md](demo-ux.md) vizuális rendszert (Syne / tatami tokenek, szerep képernyők, motion). |
 | **Miért** | A modul kipróbálhatósága UX nélkül hamis; a referencia UI a hostok mintája is. |
 | **Státusz** | Rögzítve |
+
+---
+
+## D18 — Security first + semmi érzékeny a gitben
+
+| | |
+|--|--|
+| **Döntés** | Cyber security elsődleges. Titkok, kulcsok, felvétel, TURN creds **gitignore**; produkcióban WSS/HTTPS, Origin check, szerver-`peerId`, fail-closed catalog. Lásd [security.md](security.md). |
+| **Miért** | Párosítás és élő média érzékeny; egy kiszivárgott token = session hijack. |
+| **Státusz** | Rögzítve |

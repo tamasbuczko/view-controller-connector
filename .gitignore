@@ -1,23 +1,48 @@
 # dependencies
 node_modules/
 vendor/
+.pnpm-store/
 
 # builds
 dist/
 build/
+coverage/
 *.tsbuildinfo
+*.map
 
-# env / secrets
+# env / secrets — soha ne kerüljenek a gitbe
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.secret
+*credentials*
+*secrets*.json
+auth.json
+.npmrc
+!.npmrc.example
+
+# certificates / local TLS
+certs/
+*.crt
+!docs/**/*.md
 
 # logs / caches
 *.log
 npm-debug.log*
-.pnpm-store/
+yarn-error.log*
 .cache/
 .turbo/
+.tmp/
+tmp/
+temp/
 
 # OS / IDE
 .DS_Store
@@ -25,6 +50,23 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json.example
 
 # PHP / local
 *.local.php
+phpunit.xml
+.phpunit.result.cache
+
+# local runtime / demó adat
+data/
+storage/
+uploads/
+recordings/
+*.webm
+*.sqlite
+*.sqlite3
+*.db
+
+# TURN / ICE credential dumps
+ice-servers.local.json
+turn-credentials.json

@@ -27,6 +27,7 @@
 | [demo-ux.md](demo-ux.md) | **Demó UX/UI terv** |
 | [mvp.md](mvp.md) | Scope + acceptance |
 | [market-notes.md](market-notes.md) | Piac / VAR jegyzet |
+| [security.md](security.md) | **Security first**, titkok, runtime elvek |
 | [open-questions.md](open-questions.md) | Nem blokkoló nyitottak |
 
 ## Állapot
