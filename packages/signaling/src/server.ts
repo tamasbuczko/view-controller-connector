@@ -384,6 +384,26 @@ async function handle(
       return;
     }
 
+    case "conflict.claim":
+    case "conflict.release": {
+      const sid = peer.sessionId;
+      if (!sid) {
+        return fail(ws, reqId, "SESSION_NOT_FOUND", "not in session");
+      }
+      for (const p of store.peersInSession(sid)) {
+        if (p.id === peer.id) continue;
+        send(p.ws, {
+          type: msg.type,
+          fromPeerId: peer.id,
+          feature: msg.feature,
+          strategy: msg.strategy,
+          peerId: msg.peerId ?? peer.id,
+        });
+      }
+      reply(ws, reqId, { type: `${String(msg.type)}.ok` });
+      return;
+    }
+
     default:
       fail(ws, reqId, "CONFIG_INVALID", `unknown type: ${type}`);
   }

@@ -34,7 +34,7 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 | S3 | ConnectionMode + QR párosítás lifecycle | DONE |
 | S4 | DataChannel üzenetek (relay kivezetése) | DONE |
 | S5 | WebRTC P2P média publish/subscribe | DONE |
-| S6 | Conflict + kick/disconnect policy | TODO |
+| S6 | Conflict + kick/disconnect policy | DONE |
 | S7 | Local record + replay (video-ref) | TODO |
 | S8 | `@vcc/ui` teljes shellek (demo-ux) | TODO |
 | S9 | `demo-php` teljes route-ok + 3–5 eszköz script | TODO |
@@ -187,6 +187,8 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 4. `camera.live` media-exclusive — második publish conflict event / elutasítás.  
 5. **PASS** ha 1–4 igaz.
 
+**Státusz:** DONE — `canKick` / `denyUnlessKickAllowed`; `ConflictBoard` + signaling `conflict.claim|release`; LWW / active-lock / media-exclusive. Automata: `test-s6.html`.
+
 ---
 
 ## S7 — Local record + replay
@@ -291,10 +293,10 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 
 ## Jelenlegi helyzet (rövid)
 
-- **S0–S5:** zöld (`pnpm test:s3`; `test-s4.html`; `test-s5.html`).  
-- **S6–S12:** TODO — hátralévő megvalósítás.  
+- **S0–S6:** zöld (`pnpm test:s3`; `test-s4/s5/s6.html`).  
+- **S7–S12:** TODO — hátralévő megvalósítás.  
 - A kérdésre („kész a modul?”): **nem**, amíg S12 PASS nincs.
 
 ## Következő konkrét lépés
 
-**S6** (Conflict + disconnect policy).
+**S7** (Local record + replay).

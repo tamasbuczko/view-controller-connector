@@ -1,3 +1,4 @@
+import { ConflictBoard, denyUnlessKickAllowed } from "./conflict.js";
 import { Emitter } from "./emitter.js";
 import { toVccError, VccClientError } from "./errors.js";
 import { PeerMesh } from "./peer-mesh.js";
@@ -89,6 +90,7 @@ class SessionImpl implements Session {
   private _peerId: string | null = null;
   private topology: TopologySnapshot = emptyTopology();
   private mesh: PeerMesh | null = null;
+  private readonly conflicts = new ConflictBoard();
   private pending = new Map<
     string,
     { resolve: (v: unknown) => void; reject: (e: unknown) => void }
@@ -285,6 +287,35 @@ class SessionImpl implements Session {
         });
         break;
       }
+      case "conflict.claim": {
+        const feature = String(msg.feature ?? "");
+        const strategy = msg.strategy as
+          | "media-exclusive"
+          | "active-lock"
+          | "last-write-wins";
+        const winner = String(msg.peerId ?? msg.fromPeerId ?? "");
+        if (feature && strategy && winner) {
+          this.conflicts.noteRemote(feature, strategy, winner);
+          this.emitter.emit("conflict", {
+            name: feature,
+            strategy,
+            winnerPeerId: winner,
+          });
+        }
+        break;
+      }
+      case "conflict.release": {
+        const feature = String(msg.feature ?? "");
+        const strategy = msg.strategy as
+          | "media-exclusive"
+          | "active-lock"
+          | "last-write-wins";
+        const who = String(msg.peerId ?? msg.fromPeerId ?? "");
+        if (feature && strategy && who) {
+          this.conflicts.release(feature, who, strategy);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -402,17 +433,7 @@ class SessionImpl implements Session {
   }
 
   async kick(peerId: string, reason?: string): Promise<void> {
-    const policy = this.config.disconnectPolicy;
-    if (this._role === "observer") {
-      // always allowed for observer under all policies that include observer
-    } else if (
-      this._role === "view" &&
-      (policy === "observer+view" || policy === "observer+view+self-leave")
-    ) {
-      // ok
-    } else {
-      throw new VccClientError("POLICY_DENIED", "kick not allowed by policy");
-    }
+    denyUnlessKickAllowed(this.config.disconnectPolicy, this._role);
     await this.request("peer.kick", { peerId, reason });
   }
 
@@ -470,6 +491,36 @@ class SessionImpl implements Session {
         "NAME_NOT_IN_CATALOG",
         `unknown message name: ${msg.name}`,
       );
+    }
+    const strategy = this.config.featureConflict?.[msg.name];
+    if (strategy && this._peerId) {
+      const claim = this.conflicts.tryClaim(msg.name, strategy, this._peerId);
+      if (!claim.ok) {
+        this.emitter.emit("conflict", {
+          name: msg.name,
+          strategy,
+          winnerPeerId: claim.winnerPeerId,
+        });
+        throw new VccClientError(
+          "POLICY_DENIED",
+          `feature ${msg.name} locked by ${claim.winnerPeerId} (${strategy})`,
+        );
+      }
+      if (strategy === "last-write-wins") {
+        this.emitter.emit("conflict", {
+          name: msg.name,
+          strategy,
+          winnerPeerId: this._peerId,
+        });
+      }
+      if (strategy === "active-lock") {
+        this.broadcastConflict(
+          "conflict.claim",
+          msg.name,
+          strategy,
+          this._peerId,
+        );
+      }
     }
     const envelope = {
       v: 1 as const,
@@ -544,8 +595,41 @@ class SessionImpl implements Session {
           return;
         }
         if (m.name === "vcc.media.meta") {
-          // Reserved for richer track mapping; ontrack already emits.
           return;
+        }
+        if (m.name === "vcc.conflict.claim" && m.payload) {
+          const p = m.payload as {
+            feature: string;
+            strategy: "media-exclusive" | "active-lock" | "last-write-wins";
+            peerId: string;
+          };
+          this.conflicts.noteRemote(p.feature, p.strategy, p.peerId);
+          this.emitter.emit("conflict", {
+            name: p.feature,
+            strategy: p.strategy,
+            winnerPeerId: p.peerId,
+          });
+          return;
+        }
+        if (m.name === "vcc.conflict.release" && m.payload) {
+          const p = m.payload as {
+            feature: string;
+            strategy: "media-exclusive" | "active-lock" | "last-write-wins";
+            peerId: string;
+          };
+          this.conflicts.release(p.feature, p.peerId, p.strategy);
+          return;
+        }
+        const strategy = this.config.featureConflict?.[m.name];
+        if (strategy === "last-write-wins") {
+          this.conflicts.noteRemote(m.name, strategy, m.from);
+          this.emitter.emit("conflict", {
+            name: m.name,
+            strategy,
+            winnerPeerId: m.from,
+          });
+        } else if (strategy === "active-lock") {
+          this.conflicts.noteRemote(m.name, strategy, m.from);
         }
         this.emitter.emit("message", m);
       },
@@ -570,6 +654,34 @@ class SessionImpl implements Session {
         "POLICY_DENIED",
         "publishMedia requires View or Controller role with PeerMesh",
       );
+    }
+
+    const featureName =
+      opts.kind === "camera" || opts.kind === "screen"
+        ? "camera.live"
+        : opts.label
+          ? `media.${opts.label}`
+          : undefined;
+    const strategy = featureName
+      ? this.config.featureConflict?.[featureName]
+      : undefined;
+    if (strategy === "media-exclusive" && featureName && this._peerId) {
+      const claim = this.conflicts.tryClaim(
+        featureName,
+        strategy,
+        this._peerId,
+      );
+      if (!claim.ok) {
+        this.emitter.emit("conflict", {
+          name: featureName,
+          strategy,
+          winnerPeerId: claim.winnerPeerId,
+        });
+        throw new VccClientError(
+          "POLICY_DENIED",
+          `media-exclusive: ${featureName} held by ${claim.winnerPeerId}`,
+        );
+      }
     }
 
     let track = opts.track;
@@ -618,12 +730,44 @@ class SessionImpl implements Session {
       to: opts.to,
       label: opts.label,
     });
+
+    if (strategy === "media-exclusive" && featureName && this._peerId) {
+      this.broadcastConflict("conflict.claim", featureName, strategy, this._peerId);
+    }
+
+    const feature = featureName;
+    const strat = strategy;
+    const peer = this._peerId;
     return {
       id: pub.id,
       kind: pub.kind,
       stream,
-      stop: () => pub.stop(),
+      stop: async () => {
+        await pub.stop();
+        if (feature && strat && peer) {
+          this.conflicts.release(feature, peer, strat);
+          this.broadcastConflict("conflict.release", feature, strat, peer);
+        }
+      },
     };
+  }
+
+  private broadcastConflict(
+    type: "conflict.claim" | "conflict.release",
+    feature: string,
+    strategy: string,
+    peerId: string,
+  ): void {
+    try {
+      this.ensureSignal().send({
+        type,
+        feature,
+        strategy,
+        peerId,
+      });
+    } catch {
+      /* best effort */
+    }
   }
 
   async unpublishMedia(publicationId: string): Promise<void> {

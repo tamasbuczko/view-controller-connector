@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>VCC S6 policy test</title>
+</head>
+<body>
+  <pre id="out">running…</pre>
+  <script type="module">
+    import { createSession, canKick } from "/assets/core/index.js";
+
+    const out = document.getElementById("out");
+    const log = [];
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg);
+    }
+    function sleep(ms) {
+      return new Promise((r) => setTimeout(r, ms));
+    }
+
+    function base(overrides = {}) {
+      return {
+        signaling: {
+          adapter: "websocket",
+          url: "ws://127.0.0.1:8787",
+          dataRelayFallback: false,
+        },
+        media: {
+          transport: "p2p",
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        },
+        allowedModes: ["n-n"],
+        defaultMode: "n-n",
+        disconnectPolicy: "observer+view+self-leave",
+        groupTemplates: [],
+        catalog: [
+          { name: "score.updated", type: "state", delivery: "reliable" },
+        ],
+        featureConflict: {
+          "score.updated": "last-write-wins",
+          "camera.live": "media-exclusive",
+        },
+        ...overrides,
+      };
+    }
+
+    function fakeTrack() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 32;
+      canvas.height = 32;
+      const stream = canvas.captureStream(5);
+      return { track: stream.getVideoTracks()[0], stream };
+    }
+
+    try {
+      // --- 1. observer-only: View kick denied ---
+      assert(
+        !canKick("observer-only", "view"),
+        "canKick view under observer-only",
+      );
+      assert(canKick("observer-only", "observer"), "observer can kick");
+      const o1 = createSession(
+        base({ disconnectPolicy: "observer-only" }),
+      );
+      await o1.prepare();
+      const { sessionCode: code1 } = await o1.createAndActivate({ mode: "n-n" });
+      const v1 = createSession(base({ disconnectPolicy: "observer-only" }));
+      await v1.prepare();
+      await v1.joinWithCode(code1, "view");
+      let denied = false;
+      try {
+        await v1.kick("x");
+      } catch (e) {
+        denied = e.code === "POLICY_DENIED";
+      }
+      assert(denied, "view kick must be POLICY_DENIED");
+      log.push("T1 kick policy OK");
+      await v1.destroy();
+      await o1.destroy();
+
+      // --- 2. leave + observer kick ---
+      const o2 = createSession(base());
+      await o2.prepare();
+      const { sessionCode: code2 } = await o2.createAndActivate({ mode: "n-n" });
+      const cLeave = createSession(base());
+      await cLeave.prepare();
+      await cLeave.joinWithCode(code2, "controller");
+      await cLeave.leave();
+      assert(cLeave.status === "closed", "controller leave closes");
+      const vKick = createSession(base());
+      await vKick.prepare();
+      await vKick.joinWithCode(code2, "view");
+      await o2.kick(vKick.peerId);
+      await sleep(300);
+      log.push("T2 leave + observer kick OK");
+      await o2.destroy();
+      await cLeave.destroy();
+      await vKick.destroy();
+
+      // --- 3. last-write-wins ---
+      const o3 = createSession(base());
+      await o3.prepare();
+      const { sessionCode: code3 } = await o3.createAndActivate({ mode: "n-n" });
+      const view = createSession(base());
+      const cA = createSession(base());
+      const cB = createSession(base());
+      await view.prepare();
+      await view.joinWithCode(code3, "view");
+      await cA.prepare();
+      await cA.joinWithCode(code3, "controller");
+      await cB.prepare();
+      await cB.joinWithCode(code3, "controller");
+      await sleep(2000);
+
+      let last = null;
+      let conflicts = 0;
+      view.on("message", (m) => {
+        if (m.name === "score.updated") last = m.payload;
+      });
+      view.on("conflict", (e) => {
+        if (e.name === "score.updated") conflicts += 1;
+      });
+
+      await cA.send({ name: "score.updated", payload: { aka: 1, ao: 0 } });
+      await sleep(200);
+      await cB.send({ name: "score.updated", payload: { aka: 9, ao: 0 } });
+      await sleep(400);
+      assert(last?.aka === 9, "last-write-wins keeps last score");
+      assert(conflicts >= 1, "conflict events for LWW");
+      log.push("T3 last-write-wins OK");
+
+      // --- 4. media-exclusive ---
+      const camA = fakeTrack();
+      const pubA = await cA.publishMedia({
+        kind: "camera",
+        track: camA.track,
+        stream: camA.stream,
+      });
+      await sleep(500);
+      const camB = fakeTrack();
+      let mediaDenied = false;
+      try {
+        await cB.publishMedia({
+          kind: "camera",
+          track: camB.track,
+          stream: camB.stream,
+        });
+      } catch (e) {
+        mediaDenied = e.code === "POLICY_DENIED";
+      }
+      // If claim hasn't arrived yet, noteRemote may not have run — force claim sync:
+      if (!mediaDenied) {
+        // second attempt after claim propagation
+        await sleep(800);
+        try {
+          await cB.publishMedia({
+            kind: "camera",
+            track: camB.track,
+            stream: camB.stream,
+          });
+        } catch (e) {
+          mediaDenied = e.code === "POLICY_DENIED";
+        }
+      }
+      assert(mediaDenied, "second camera publish media-exclusive denied");
+      await pubA.stop();
+      camA.track.stop();
+      camB.track.stop();
+      log.push("T4 media-exclusive OK");
+
+      window.__S6__ = { ok: true, log };
+      out.textContent = "PASS\n" + log.join("\n");
+      await Promise.all([
+        o3.destroy(),
+        view.destroy(),
+        cA.destroy(),
+        cB.destroy(),
+      ]);
+    } catch (e) {
+      window.__S6__ = { ok: false, error: String(e?.message ?? e), log };
+      out.textContent = "FAIL\n" + (e?.stack ?? e) + "\n" + log.join("\n");
+    }
+  </script>
+</body>
+</html>

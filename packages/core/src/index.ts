@@ -6,4 +6,5 @@ export {
   allowsPersistentQr,
   parsePairUri,
 } from "./pairing.js";
+export { canKick, ConflictBoard } from "./conflict.js";
 export type * from "./types.js";
