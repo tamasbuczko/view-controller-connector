@@ -7,7 +7,8 @@
 3. **[api-comparison.md](api-comparison.md)** — LiveKit / PeerJS tanulságok  
 4. **[architecture.md](architecture.md)** + **[signaling-protocol.md](signaling-protocol.md)**  
 5. **[demo-ux.md](demo-ux.md)** — demó vizuális UX/UI  
-6. **[mvp.md](mvp.md)** — mit jelent a „kész modul” + build order  
+6. **[mvp.md](mvp.md)** — mit jelent a „kész modul”  
+7. **[implementation-plan.md](implementation-plan.md)** — **S0–S12 sorrend + lépésenkénti tesztek**  
 
 ## Teljes lista
 
@@ -17,6 +18,7 @@
 | [vision.md](vision.md) | Cél, pozicionálás |
 | [api-comparison.md](api-comparison.md) | Modern API összevetés |
 | [api-surface.md](api-surface.md) | **Zárolt** TypeScript szerződés |
+| [implementation-plan.md](implementation-plan.md) | **Megvalósítási sorrend + tesztek** |
 | [signaling-protocol.md](signaling-protocol.md) | WS wire protocol |
 | [architecture.md](architecture.md) | Rétegek, P2P, adapterek |
 | [roles.md](roles.md) | Observer / View / Controller |
@@ -32,5 +34,6 @@
 
 ## Állapot
 
-- Tervezés + API zárolás: **kész a doksikban**  
-- Alkalmazáskód: **még nincs** — implementáció az api-surface alapján indul  
+- Tervezés + API: kész  
+- Megvalósítási terv + tesztek: [`implementation-plan.md`](implementation-plan.md)  
+- Kód: S0–S2 alap kész; S3–S12 hátravan → modul még **nem** „kész”  

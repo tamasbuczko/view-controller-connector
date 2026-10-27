@@ -37,6 +37,7 @@ Böngésző:
 ## Dokumentáció
 
 → [docs/README.md](docs/README.md)  
+→ [docs/implementation-plan.md](docs/implementation-plan.md) — **S0–S12 + tesztek**  
 → [docs/api-surface.md](docs/api-surface.md)  
 → [docs/security.md](docs/security.md)
 

@@ -15,19 +15,13 @@ Cél: **egyszer megtervezett felület**, amit implementálunk — ne kelljen ké
 
 Tehát: a modul **nem** „MVP-csonk API”; a demó **nem** bekötés-vázlat. Amit későbbre hagyunk, az **infra adapter** és **külső host**, nem a mag szerződés.
 
-## Implementációs build order (belső, API-törés nélkül)
+## Implementációs sorrend + tesztek
 
-1. Config + Session skeleton + events + error codes  
-2. Signaling WSS + session code/join/topology  
-3. Pairing QR / mode lifecycle  
-4. DataChannel send/receive + catalog fail-closed  
-5. WebRTC P2P media publish/subscribe  
-6. Recording/replay local buffer (video-ref)  
-7. Conflict strategies + kick/disconnect policy  
-8. `@vcc/ui` shellek a [demo-ux](demo-ux.md) szerint  
-9. `apps/demo-php` teljes route-ok + README 3-eszköz script  
+A **részletes lépésterv** (S0–S12), deliverable-ekkel és **lépésenkénti tesztforgatókönyvekkel**:
 
-Párhuzamosan teszt: unit core; manuális 3–5 böngésző.
+→ **[implementation-plan.md](implementation-plan.md)**
+
+Szabály: következő lépés csak akkor indul, ha az előző lépés tesztje **PASS**.
 
 ## Expliciten NEM a core v1 része (de API-n van hely)
 
