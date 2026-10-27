@@ -18,6 +18,19 @@ export interface Link {
   state: "pairing" | "connected" | "failed";
 }
 
+export type PairTarget = {
+  type: string;
+  viewId?: string;
+  groupId?: string;
+};
+
+export interface PairTokenEntry {
+  target: PairTarget;
+  expiresAt: number;
+  consumed: boolean;
+  singleUse: boolean;
+}
+
 export interface SessionRoom {
   id: string;
   code: string;
@@ -25,10 +38,11 @@ export interface SessionRoom {
   active: boolean;
   groups: Map<string, string[]>;
   links: Link[];
-  pairTokens: Map<
-    string,
-    { target: { type: string; viewId?: string; groupId?: string }; expiresAt: number; consumed: boolean }
-  >;
+  pairTokens: Map<string, PairTokenEntry>;
+}
+
+export function isSingleUseMode(mode: ConnectionMode): boolean {
+  return mode === "1-1" || mode === "1-n";
 }
 
 export class Store {
@@ -103,33 +117,53 @@ export class Store {
         id,
         members,
       })),
-      links: room.links,
+      links: [...room.links],
     };
   }
 
-  mintPairToken(
-    room: SessionRoom,
-    target: { type: string; viewId?: string; groupId?: string },
-  ): string {
+  mintPairToken(room: SessionRoom, target: PairTarget): string {
     const t = token();
-    const singleUse = room.mode === "1-1" || room.mode === "1-n";
     room.pairTokens.set(t, {
       target,
       expiresAt: Date.now() + 15 * 60_000,
       consumed: false,
+      singleUse: isSingleUseMode(room.mode),
     });
-    // singleUse tracked on consume
-    void singleUse;
     return t;
   }
 
-  consumePairToken(room: SessionRoom, pairToken: string) {
+  findPairToken(
+    pairToken: string,
+  ): { room: SessionRoom; entry: PairTokenEntry } | null {
+    for (const room of this.sessions.values()) {
+      const entry = room.pairTokens.get(pairToken);
+      if (entry) return { room, entry };
+    }
+    return null;
+  }
+
+  /**
+   * Consume a pair token according to ConnectionMode.
+   * 1-1 / 1-n: single-use → second call TOKEN_CONSUMED
+   * n-1 / n-n: reusable until expiry
+   */
+  consumePairToken(
+    room: SessionRoom,
+    pairToken: string,
+  ):
+    | { ok: true; entry: PairTokenEntry; closedPairing: boolean }
+    | { ok: false; code: "TOKEN_INVALID" | "TOKEN_CONSUMED" } {
     const entry = room.pairTokens.get(pairToken);
-    if (!entry) return null;
-    if (entry.expiresAt < Date.now()) return null;
-    const singleUse = room.mode === "1-1" || room.mode === "1-n";
-    if (singleUse && entry.consumed) return null;
+    if (!entry) return { ok: false, code: "TOKEN_INVALID" };
+    if (entry.expiresAt < Date.now()) {
+      room.pairTokens.delete(pairToken);
+      return { ok: false, code: "TOKEN_INVALID" };
+    }
+    if (entry.singleUse && entry.consumed) {
+      return { ok: false, code: "TOKEN_CONSUMED" };
+    }
+    const closedPairing = entry.singleUse && !entry.consumed;
     entry.consumed = true;
-    return entry;
+    return { ok: true, entry, closedPairing };
   }
 }

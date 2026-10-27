@@ -249,6 +249,23 @@ class SessionImpl implements Session {
           delivery: (msg.delivery as "reliable" | "lossy") ?? "reliable",
         });
         break;
+      case "pairing.closed": {
+        const target = msg.target as PairingTarget;
+        this.emitter.emit("pairingQr", {
+          target,
+          payload: {
+            v: 1,
+            sessionId: this._id ?? "",
+            target,
+            pairToken: "",
+            signalingUrl: this.config.signaling.url,
+            mode: this._mode ?? this.config.defaultMode,
+            uri: "",
+          },
+          visible: false,
+        });
+        break;
+      }
       default:
         break;
     }

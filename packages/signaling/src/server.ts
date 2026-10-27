@@ -24,6 +24,19 @@ function broadcastTopology(sessionId: string): void {
   }
 }
 
+function broadcastPairingClosed(
+  sessionId: string,
+  target: { type: string; viewId?: string; groupId?: string },
+): void {
+  for (const p of store.peersInSession(sessionId)) {
+    send(p.ws, {
+      type: "pairing.closed",
+      target,
+      reason: "consumed",
+    });
+  }
+}
+
 function reply(
   ws: WebSocket,
   reqId: unknown,
@@ -152,18 +165,30 @@ async function handle(
       let target = msg.target as
         | { type: string; viewId?: string; groupId?: string }
         | undefined;
+      let closedPairing = false;
 
       if (msg.pairToken) {
-        // find room by scanning tokens (small store)
-        for (const r of store.sessions.values()) {
-          const entry = r.pairTokens.get(String(msg.pairToken));
-          if (entry && !entry.consumed && entry.expiresAt >= Date.now()) {
-            room = r;
-            target = entry.target;
-            store.consumePairToken(r, String(msg.pairToken));
-            break;
-          }
+        const found = store.findPairToken(String(msg.pairToken));
+        if (!found) {
+          return fail(ws, reqId, "TOKEN_INVALID", "unknown pair token");
         }
+        const consumed = store.consumePairToken(
+          found.room,
+          String(msg.pairToken),
+        );
+        if (!consumed.ok) {
+          return fail(
+            ws,
+            reqId,
+            consumed.code,
+            consumed.code === "TOKEN_CONSUMED"
+              ? "pair token already used"
+              : "invalid pair token",
+          );
+        }
+        room = found.room;
+        target = consumed.entry.target;
+        closedPairing = consumed.closedPairing;
       }
 
       if (!room || !room.active) {
@@ -196,6 +221,9 @@ async function handle(
         topology: store.topology(room.id),
       });
       broadcastTopology(room.id);
+      if (closedPairing && target) {
+        broadcastPairingClosed(room.id, target);
+      }
       return;
     }
 
@@ -204,13 +232,23 @@ async function handle(
       if (!room || peer.role !== "controller") {
         return fail(ws, reqId, "POLICY_DENIED", "controller pair only");
       }
-      const entry = store.consumePairToken(room, String(msg.pairToken));
-      if (!entry) {
-        return fail(ws, reqId, "TOKEN_INVALID", "invalid or consumed token");
+      const consumed = store.consumePairToken(room, String(msg.pairToken));
+      if (!consumed.ok) {
+        return fail(
+          ws,
+          reqId,
+          consumed.code,
+          consumed.code === "TOKEN_CONSUMED"
+            ? "pair token already used"
+            : "invalid pair token",
+        );
       }
-      linkController(room, peer, entry.target);
+      linkController(room, peer, consumed.entry.target);
       reply(ws, reqId, { type: "session.paired" });
       broadcastTopology(room.id);
+      if (consumed.closedPairing) {
+        broadcastPairingClosed(room.id, consumed.entry.target);
+      }
       return;
     }
 

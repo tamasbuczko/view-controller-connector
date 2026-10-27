@@ -31,7 +31,7 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 | S0 | Monorepo + tool + security baseline | DONE |
 | S1 | Signaling WSS: session create/join/topology | DONE (alap) |
 | S2 | Core Session: prepare, create, join, events, catalog | DONE (alap; media stub) |
-| S3 | ConnectionMode + QR párosítás lifecycle | TODO |
+| S3 | ConnectionMode + QR párosítás lifecycle | DONE |
 | S4 | DataChannel üzenetek (relay kivezetése) | TODO |
 | S5 | WebRTC P2P média publish/subscribe | TODO |
 | S6 | Conflict + kick/disconnect policy | TODO |
@@ -128,6 +128,8 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 2. Topológia helyes.
 
 **PASS** ha T1–T4 mind zöld.
+
+**Státusz:** DONE — `pnpm test:s3` (signaling WS forgatókönyvek T1–T4). Core: `pairing.ts` helpers + `pairing.closed` → QR hide. UI: Observer/View QR. Demó: pair URI a Controlleren.
 
 ---
 
@@ -285,10 +287,10 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 
 ## Jelenlegi helyzet (rövid)
 
-- **S0–S2:** alap zöld (pontozás demó `data.relay`-jel).  
-- **S3–S12:** TODO — ez a hátralévő megvalósítás.  
+- **S0–S3:** zöld (`pnpm test:s3` T1–T4).  
+- **S4–S12:** TODO — hátralévő megvalósítás.  
 - A kérdésre („kész a modul?”): **nem**, amíg S12 PASS nincs.
 
 ## Következő konkrét lépés
 
-**S3** (ConnectionMode + QR lifecycle), majd **S4–S5** (DataChannel + media).
+**S4–S5** (DataChannel + media).
