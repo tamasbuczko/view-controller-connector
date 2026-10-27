@@ -1,0 +1,64 @@
+:root,
+[data-theme="vcc-demo"] {
+  --vcc-ink: #12140f;
+  --vcc-mat: #2f3d24;
+  --vcc-mat-deep: #1a2414;
+  --vcc-paper: #f3efe4;
+  --vcc-signal: #e8a317;
+  --vcc-live: #c43c22;
+  --vcc-line: color-mix(in oklab, var(--vcc-ink) 12%, transparent);
+  --font-display: "Syne", system-ui, sans-serif;
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius: 2px;
+}
+
+[data-theme="vcc-demo"] {
+  color: var(--vcc-ink);
+  background:
+    linear-gradient(160deg, var(--vcc-mat-deep) 0%, transparent 42%),
+    var(--vcc-paper);
+  font-family: var(--font-ui);
+  min-height: 100vh;
+}
+
+[data-theme="vcc-demo"] .vcc-brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+[data-theme="vcc-demo"] .vcc-code {
+  font-family: var(--font-mono);
+  font-size: 2.5rem;
+  letter-spacing: 0.12em;
+}
+
+[data-theme="vcc-demo"] .vcc-btn {
+  appearance: none;
+  border: 1px solid var(--vcc-ink);
+  background: var(--vcc-ink);
+  color: var(--vcc-paper);
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--radius);
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-theme="vcc-demo"] .vcc-btn.secondary {
+  background: transparent;
+  color: var(--vcc-ink);
+}
+
+[data-theme="vcc-demo"] .vcc-panel {
+  border: 1px solid var(--vcc-line);
+  padding: 1.25rem;
+  background: color-mix(in oklab, var(--vcc-paper) 88%, white);
+}
+
+[data-theme="vcc-demo"] .vcc-live {
+  color: var(--vcc-live);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}

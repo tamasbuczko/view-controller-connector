@@ -7,6 +7,7 @@ vendor/
 dist/
 build/
 coverage/
+apps/demo-php/public/assets/
 *.tsbuildinfo
 *.map
 
@@ -26,8 +27,7 @@ id_ed25519.*
 *credentials*
 *secrets*.json
 auth.json
-.npmrc
-!.npmrc.example
+# Project .npmrc (no tokens) may be committed; never commit auth tokens there.
 
 # certificates / local TLS
 certs/

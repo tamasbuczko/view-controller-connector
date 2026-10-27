@@ -1,0 +1,20 @@
+{
+  "name": "view-controller-connector",
+  "private": true,
+  "version": "0.1.0",
+  "description": "View–Controller Connector (VCC) — embeddable Observer/View/Controller realtime module",
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev:signaling": "pnpm --filter @vcc/signaling dev",
+    "dev:demo": "pnpm --filter @vcc/demo-php start",
+    "typecheck": "pnpm -r run typecheck",
+    "clean": "pnpm -r exec rimraf dist"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

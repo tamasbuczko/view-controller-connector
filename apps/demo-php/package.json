@@ -1,0 +1,14 @@
+{
+  "name": "@vcc/demo-php",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build:assets": "node ./scripts/copy-assets.mjs",
+    "start": "node ./scripts/copy-assets.mjs && php -S 127.0.0.1:8080 -t public",
+    "typecheck": "node -e \"process.exit(0)\""
+  },
+  "devDependencies": {
+    "@vcc/core": "workspace:*",
+    "@vcc/ui": "workspace:*"
+  }
+}
