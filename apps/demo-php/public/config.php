@@ -9,6 +9,9 @@ return [
     ],
     'media' => [
         'transport' => 'p2p',
+        'iceServers' => [
+            ['urls' => 'stun:stun.l.google.com:19302'],
+        ],
     ],
     'allowedModes' => ['1-1', '1-n', 'n-1', 'n-n'],
     'defaultMode' => 'n-n',

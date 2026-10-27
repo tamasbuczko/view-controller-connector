@@ -1,8 +1,10 @@
 import { Emitter } from "./emitter.js";
 import { toVccError, VccClientError } from "./errors.js";
+import { PeerMesh } from "./peer-mesh.js";
 import { SignalingClient } from "./signaling-client.js";
 import type {
   ConnectionMode,
+  IceServersConfig,
   MediaPublication,
   OutboundMessage,
   PairingTarget,
@@ -18,6 +20,10 @@ import type {
   VccConfig,
 } from "./types.js";
 import { validateConfig } from "./validate-config.js";
+
+const DEFAULT_ICE: IceServersConfig[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+];
 
 const emptyTopology = (sessionId = "", mode: ConnectionMode = "1-1"): TopologySnapshot => ({
   sessionId,
@@ -82,11 +88,13 @@ class SessionImpl implements Session {
   private _sessionCode: string | null = null;
   private _peerId: string | null = null;
   private topology: TopologySnapshot = emptyTopology();
+  private mesh: PeerMesh | null = null;
   private pending = new Map<
     string,
     { resolve: (v: unknown) => void; reject: (e: unknown) => void }
   >();
   private reqSeq = 0;
+  private msgSeq = 0;
 
   constructor(config: VccConfig) {
     this.config = config;
@@ -226,6 +234,7 @@ class SessionImpl implements Session {
       case "topology":
         this.topology = msg.topology as TopologySnapshot;
         this.emitter.emit("topology", this.topology);
+        this.ensureMesh()?.syncTopology(this.topology);
         break;
       case "peer.joined":
         this.emitter.emit("peerJoined", String(msg.peerId));
@@ -233,10 +242,20 @@ class SessionImpl implements Session {
       case "peer.left":
         this.emitter.emit("peerLeft", String(msg.peerId), msg.reason as string | undefined);
         break;
-      case "signal.relay":
-        // WebRTC wiring — next iteration
+      case "signal.relay": {
+        const from = String(msg.fromPeerId ?? "");
+        const payload = msg.payload as
+          | { kind: "offer" | "answer" | "ice"; sdp?: string; candidate?: RTCIceCandidateInit | null }
+          | undefined;
+        if (from && payload?.kind && this.mesh) {
+          void this.mesh.handleSignal(from, payload as never).catch((e) =>
+            this.emitError(e),
+          );
+        }
         break;
+      }
       case "data":
+        // Fallback path only when dataRelayFallback is enabled.
         this.emitter.emit("message", {
           v: 1,
           id: String(msg.id ?? ""),
@@ -287,6 +306,7 @@ class SessionImpl implements Session {
     this._role = "observer";
     this.setStatus("active");
     this.topology = emptyTopology(this._id, mode);
+    // Observer does not mesh for S4 data path (controllers ↔ views).
     return { sessionId: this._id, sessionCode: this._sessionCode };
   }
 
@@ -335,6 +355,7 @@ class SessionImpl implements Session {
       this.emitter.emit("topology", this.topology);
     }
     this.setStatus("active");
+    this.ensureMesh()?.syncTopology(this.topology);
   }
 
   async joinWithPairToken(tokenPayload: PairPayload): Promise<void> {
@@ -351,6 +372,7 @@ class SessionImpl implements Session {
       this.emitter.emit("topology", this.topology);
     }
     this.setStatus("active");
+    this.ensureMesh()?.syncTopology(this.topology);
   }
 
   async pair(tokenPayload: PairPayload): Promise<void> {
@@ -365,6 +387,7 @@ class SessionImpl implements Session {
       pairToken: tokenPayload.pairToken,
       target: tokenPayload.target,
     });
+    this.ensureMesh()?.syncTopology(this.topology);
   }
 
   async leave(): Promise<void> {
@@ -373,6 +396,8 @@ class SessionImpl implements Session {
     } catch {
       // best effort
     }
+    this.mesh?.close();
+    this.mesh = null;
     this.setStatus("closed");
   }
 
@@ -446,7 +471,35 @@ class SessionImpl implements Session {
         `unknown message name: ${msg.name}`,
       );
     }
-    // DataChannel path — until WebRTC is wired, relay via signaling for demó bootstrap
+    const envelope = {
+      v: 1 as const,
+      id: `m${++this.msgSeq}_${Date.now()}`,
+      name: msg.name,
+      type: entry.type,
+      ts: Date.now(),
+      to: (msg.to ?? "*") as string | string[],
+      payload: msg.payload ?? null,
+      delivery: (msg.delivery ?? entry.delivery ?? "reliable") as
+        | "reliable"
+        | "lossy",
+    };
+
+    const mesh = this.ensureMesh();
+    if (mesh) {
+      try {
+        await mesh.sendJson(msg.to ?? "*", envelope);
+        return;
+      } catch (e) {
+        if (!this.config.signaling.dataRelayFallback) throw e;
+        // fall through to relay
+      }
+    } else if (!this.config.signaling.dataRelayFallback) {
+      throw new VccClientError(
+        "ICE_FAILED",
+        "no PeerMesh (Observer cannot send over DataChannel; use View/Controller or enable dataRelayFallback)",
+      );
+    }
+
     await this.request("data.relay", {
       sessionId: this._id,
       name: msg.name,
@@ -455,6 +508,41 @@ class SessionImpl implements Session {
       to: msg.to ?? "*",
       delivery: msg.delivery ?? entry.delivery ?? "reliable",
     });
+  }
+
+  private ensureMesh(): PeerMesh | null {
+    if (this._role !== "view" && this._role !== "controller") return null;
+    if (!this._peerId) return null;
+    if (this.mesh) return this.mesh;
+    const iceServers =
+      this.config.media?.iceServers?.length
+        ? this.config.media.iceServers
+        : DEFAULT_ICE;
+    this.mesh = new PeerMesh({
+      localPeerId: this._peerId,
+      role: this._role,
+      iceServers,
+      relaySignal: (toPeerId, payload) => {
+        try {
+          this.ensureSignal().send({
+            type: "signal.relay",
+            toPeerId,
+            payload,
+          });
+        } catch (e) {
+          this.emitError(e);
+        }
+      },
+      onMessage: (m) => this.emitter.emit("message", m),
+      onIceFailed: () => {
+        this.emitError(
+          new VccClientError("ICE_FAILED", "peer connection failed", {
+            retryable: true,
+          }),
+        );
+      },
+    });
+    return this.mesh;
   }
 
   async publishMedia(_opts: PublishMediaOpts): Promise<MediaPublication> {
@@ -487,6 +575,8 @@ class SessionImpl implements Session {
     } catch {
       /* ignore */
     }
+    this.mesh?.close();
+    this.mesh = null;
     this.signaling?.close();
     this.signaling = null;
     this.emitter.clear();

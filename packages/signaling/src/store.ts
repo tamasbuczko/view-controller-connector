@@ -10,6 +10,8 @@ export interface Peer {
   ws: WebSocket;
   sessionId: string | null;
   label?: string;
+  /** Controller joined by session code → auto-link new Views. */
+  openMesh?: boolean;
 }
 
 export interface Link {

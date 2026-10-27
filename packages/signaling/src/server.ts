@@ -204,7 +204,23 @@ async function handle(
       peer.sessionId = room.id;
 
       if (role === "controller" && target) {
+        peer.openMesh = false;
         linkController(room, peer, target);
+      } else if (role === "controller" && !msg.pairToken) {
+        // Code-join convenience: link to every current View; stay open for late Views.
+        peer.openMesh = true;
+        const views = store
+          .peersInSession(room.id)
+          .filter((p) => p.role === "view" && p.id !== peer.id);
+        for (const v of views) {
+          linkController(room, peer, { type: "view", viewId: v.id });
+        }
+      } else if (role === "view") {
+        for (const c of store.peersInSession(room.id)) {
+          if (c.role === "controller" && c.openMesh) {
+            linkController(room, c, { type: "view", viewId: peer.id });
+          }
+        }
       }
 
       for (const p of store.peersInSession(room.id)) {

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>VCC S4 DataChannel test</title>
+</head>
+<body>
+  <pre id="out">running…</pre>
+  <script type="module">
+    import { createSession } from "/assets/core/index.js";
+
+    const out = document.getElementById("out");
+    const log = [];
+    const cfg = () => ({
+      signaling: {
+        adapter: "websocket",
+        url: "ws://127.0.0.1:8787",
+        dataRelayFallback: false,
+      },
+      media: {
+        transport: "p2p",
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      },
+      allowedModes: ["1-1", "1-n", "n-1", "n-n"],
+      defaultMode: "n-n",
+      disconnectPolicy: "observer+view+self-leave",
+      groupTemplates: [],
+      catalog: [
+        { name: "score.updated", type: "state", delivery: "reliable" },
+        { name: "probe.ping", type: "event", delivery: "reliable" },
+      ],
+    });
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg);
+    }
+
+    async function sleep(ms) {
+      await new Promise((r) => setTimeout(r, ms));
+    }
+
+    try {
+      const observer = createSession(cfg());
+      const view = createSession(cfg());
+      const view2 = createSession(cfg());
+      const controller = createSession(cfg());
+
+      await observer.prepare();
+      const { sessionCode } = await observer.createAndActivate({ mode: "n-n" });
+      log.push(`session ${sessionCode}`);
+
+      await view.prepare();
+      await view.joinWithCode(sessionCode, "view");
+      await view2.prepare();
+      await view2.joinWithCode(sessionCode, "view");
+
+      let got1 = null;
+      let got2 = null;
+      view.on("message", (m) => {
+        if (m.name === "score.updated") got1 = m;
+      });
+      view2.on("message", (m) => {
+        if (m.name === "score.updated") got2 = m;
+      });
+
+      await controller.prepare();
+      await controller.joinWithCode(sessionCode, "controller");
+
+      // Wait for ICE / DataChannel
+      await sleep(2500);
+
+      await controller.send({
+        name: "score.updated",
+        to: "*",
+        payload: { aka: 1, ao: 0 },
+      });
+      await sleep(500);
+      assert(got1?.payload?.aka === 1, "view1 should receive score via DC");
+      assert(got2?.payload?.aka === 1, "view2 should receive score via DC");
+      log.push("broadcast OK");
+
+      got1 = null;
+      got2 = null;
+      await controller.send({
+        name: "score.updated",
+        to: view.peerId,
+        payload: { aka: 2, ao: 0 },
+      });
+      await sleep(500);
+      assert(got1?.payload?.aka === 2, "targeted view1 got message");
+      assert(got2 === null, "view2 must not get peer-targeted message");
+      log.push("targeted OK");
+
+      let denied = false;
+      try {
+        await controller.send({ name: "not.in.catalog", payload: {} });
+      } catch (e) {
+        denied = e.code === "NAME_NOT_IN_CATALOG";
+      }
+      assert(denied, "unknown catalog name must fail");
+      log.push("catalog fail-closed OK");
+
+      // Monkey-patch: ensure no data.relay was needed — mesh path succeeded above.
+      window.__S4__ = { ok: true, log };
+      out.textContent = "PASS\n" + log.join("\n");
+      await Promise.all([
+        observer.destroy(),
+        view.destroy(),
+        view2.destroy(),
+        controller.destroy(),
+      ]);
+    } catch (e) {
+      window.__S4__ = { ok: false, error: String(e?.message ?? e), log };
+      out.textContent = "FAIL\n" + (e?.stack ?? e) + "\n" + log.join("\n");
+    }
+  </script>
+</body>
+</html>

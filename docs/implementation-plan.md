@@ -32,7 +32,7 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 | S1 | Signaling WSS: session create/join/topology | DONE (alap) |
 | S2 | Core Session: prepare, create, join, events, catalog | DONE (alap; media stub) |
 | S3 | ConnectionMode + QR párosítás lifecycle | DONE |
-| S4 | DataChannel üzenetek (relay kivezetése) | TODO |
+| S4 | DataChannel üzenetek (relay kivezetése) | DONE |
 | S5 | WebRTC P2P média publish/subscribe | TODO |
 | S6 | Conflict + kick/disconnect policy | TODO |
 | S7 | Local record + replay (video-ref) | TODO |
@@ -148,6 +148,8 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 5. Ismeretlen catalog név továbbra is fail-closed.  
 6. `to: peerId` csak a cél View-t éri el (2 View esetén).  
 7. **PASS** ha 3–6 igaz.
+
+**Státusz:** DONE — `PeerMesh` + DataChannel; `signaling.dataRelayFallback` default off. Böngésző: `http://127.0.0.1:8080/test-s4.html` (broadcast, targeted `to`, catalog fail-closed).
 
 ---
 
@@ -287,10 +289,10 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 
 ## Jelenlegi helyzet (rövid)
 
-- **S0–S3:** zöld (`pnpm test:s3` T1–T4).  
-- **S4–S12:** TODO — hátralévő megvalósítás.  
+- **S0–S4:** zöld (`pnpm test:s3`; `test-s4.html` DataChannel).  
+- **S5–S12:** TODO — hátralévő megvalósítás.  
 - A kérdésre („kész a modul?”): **nem**, amíg S12 PASS nincs.
 
 ## Következő konkrét lépés
 
-**S4–S5** (DataChannel + media).
+**S5** (WebRTC P2P média publish/subscribe).

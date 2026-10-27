@@ -65,6 +65,11 @@ export interface VccConfig {
   signaling: {
     adapter: "websocket" | "php-poll";
     url: string;
+    /**
+     * If true, `send()` may fall back to signaling `data.relay`.
+     * Default false — domain messages go over WebRTC DataChannel only.
+     */
+    dataRelayFallback?: boolean;
   };
   media?: {
     transport: "p2p" | "sfu";
