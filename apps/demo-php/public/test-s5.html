@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>VCC S5 media test</title>
+</head>
+<body>
+  <pre id="out">running…</pre>
+  <video id="remote" autoplay playsinline muted width="160" height="120"></video>
+  <script type="module">
+    import { createSession } from "/assets/core/index.js";
+
+    const out = document.getElementById("out");
+    const remote = document.getElementById("remote");
+    const log = [];
+
+    const cfg = () => ({
+      signaling: {
+        adapter: "websocket",
+        url: "ws://127.0.0.1:8787",
+        dataRelayFallback: false,
+      },
+      media: {
+        transport: "p2p",
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      },
+      allowedModes: ["n-n"],
+      defaultMode: "n-n",
+      disconnectPolicy: "observer+view+self-leave",
+      groupTemplates: [],
+      catalog: [{ name: "score.updated", type: "state", delivery: "reliable" }],
+    });
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg);
+    }
+
+    function sleep(ms) {
+      return new Promise((r) => setTimeout(r, ms));
+    }
+
+    function fakeCamera() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 160;
+      canvas.height = 120;
+      const ctx = canvas.getContext("2d");
+      let frame = 0;
+      const timer = setInterval(() => {
+        frame += 1;
+        ctx.fillStyle = `hsl(${frame % 360} 70% 40%)`;
+        ctx.fillRect(0, 0, 160, 120);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(String(frame), 10, 20);
+      }, 100);
+      const stream = canvas.captureStream(10);
+      const track = stream.getVideoTracks()[0];
+      return {
+        stream,
+        track,
+        stop() {
+          clearInterval(timer);
+          track.stop();
+        },
+      };
+    }
+
+    try {
+      const observer = createSession(cfg());
+      const view = createSession(cfg());
+      const controller = createSession(cfg());
+
+      await observer.prepare();
+      const { sessionCode } = await observer.createAndActivate({ mode: "n-n" });
+      log.push(`session ${sessionCode}`);
+
+      await view.prepare();
+      await view.joinWithCode(sessionCode, "view");
+
+      let gotTrack = null;
+      let ended = false;
+      view.on("track", (e) => {
+        gotTrack = e;
+        remote.srcObject = e.stream;
+      });
+      view.on("trackEnded", () => {
+        ended = true;
+        remote.srcObject = null;
+      });
+
+      await controller.prepare();
+      await controller.joinWithCode(sessionCode, "controller");
+      await sleep(2000);
+
+      const cam = fakeCamera();
+      const pub = await controller.publishMedia({
+        kind: "custom",
+        track: cam.track,
+        stream: cam.stream,
+        label: "fake",
+      });
+      log.push(`published ${pub.id}`);
+
+      await sleep(2500);
+      assert(gotTrack, "view should receive remote track");
+      assert(gotTrack.publicationId === pub.id, "publicationId should match track.id");
+      log.push("track OK");
+
+      await pub.stop();
+      await sleep(800);
+      assert(ended, "trackEnded should fire after stop");
+      log.push("trackEnded OK");
+
+      // MEDIA_DENIED path: custom without track
+      let denied = false;
+      try {
+        await controller.publishMedia({ kind: "custom" });
+      } catch (e) {
+        denied = e.code === "CONFIG_INVALID" || e.code === "MEDIA_DENIED";
+      }
+      assert(denied, "custom without track must fail");
+      log.push("deny OK");
+
+      window.__S5__ = { ok: true, log };
+      out.textContent = "PASS\n" + log.join("\n");
+      cam.stop();
+      await Promise.all([
+        observer.destroy(),
+        view.destroy(),
+        controller.destroy(),
+      ]);
+    } catch (e) {
+      window.__S5__ = { ok: false, error: String(e?.message ?? e), log };
+      out.textContent = "FAIL\n" + (e?.stack ?? e) + "\n" + log.join("\n");
+    }
+  </script>
+</body>
+</html>

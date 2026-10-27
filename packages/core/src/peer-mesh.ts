@@ -1,5 +1,10 @@
 import { VccClientError } from "./errors.js";
-import type { IceServersConfig, InboundMessage, TopologySnapshot } from "./types.js";
+import type {
+  IceServersConfig,
+  InboundMessage,
+  RemoteTrackEvent,
+  TopologySnapshot,
+} from "./types.js";
 
 type SignalPayload =
   | { kind: "offer"; sdp: string }
@@ -12,6 +17,8 @@ export interface PeerMeshOpts {
   iceServers: IceServersConfig[];
   relaySignal: (toPeerId: string, payload: SignalPayload) => void;
   onMessage: (msg: InboundMessage) => void;
+  onTrack: (e: RemoteTrackEvent) => void;
+  onTrackEnded: (publicationId: string, from: string) => void;
   onIceFailed?: (remotePeerId: string) => void;
 }
 
@@ -22,6 +29,17 @@ interface PeerEntry {
   ignoreOffer: boolean;
   /** Controller is impolite offerer; View is polite. */
   polite: boolean;
+  /** senderId → publicationId for local publishes on this PC */
+  senders: Map<string, RTCRtpSender>;
+}
+
+interface LocalPublication {
+  id: string;
+  kind: string;
+  label?: string;
+  track: MediaStreamTrack;
+  stream: MediaStream;
+  targets: string[];
 }
 
 const DC_LABEL = "vcc";
@@ -29,6 +47,8 @@ const DC_LABEL = "vcc";
 export class PeerMesh {
   private readonly opts: PeerMeshOpts;
   private readonly peers = new Map<string, PeerEntry>();
+  private readonly publications = new Map<string, LocalPublication>();
+  private pubSeq = 0;
   private closed = false;
 
   constructor(opts: PeerMeshOpts) {
@@ -138,8 +158,116 @@ export class PeerMesh {
     }
   }
 
+  async publishTrack(opts: {
+    kind: string;
+    track: MediaStreamTrack;
+    stream: MediaStream;
+    to?: string | string[] | "*";
+    label?: string;
+  }): Promise<{ id: string; kind: string; stop: () => Promise<void> }> {
+    // Use MediaStreamTrack.id so remote ontrack / trackEnded line up.
+    const id = opts.track.id || `pub_${++this.pubSeq}_${Date.now()}`;
+    const targets =
+      opts.to === undefined || opts.to === "*"
+        ? [...this.peers.keys()]
+        : Array.isArray(opts.to)
+          ? opts.to
+          : [opts.to];
+    if (targets.length === 0) {
+      throw new VccClientError(
+        "TARGET_OUT_OF_SCOPE",
+        "no linked peers for publishMedia",
+      );
+    }
+
+    const pub: LocalPublication = {
+      id,
+      kind: opts.kind,
+      label: opts.label,
+      track: opts.track,
+      stream: opts.stream,
+      targets,
+    };
+    this.publications.set(id, pub);
+
+    for (const remoteId of targets) {
+      const entry = await this.ensurePeer(remoteId);
+      const sender = entry.pc.addTrack(opts.track, opts.stream);
+      entry.senders.set(id, sender);
+      // Meta so receiver can map track → publicationId
+      void this.sendJson(remoteId, {
+        v: 1,
+        id: `meta_${id}`,
+        name: "vcc.media.meta",
+        type: "system",
+        ts: Date.now(),
+        to: remoteId,
+        payload: {
+          publicationId: id,
+          kind: opts.kind,
+          label: opts.label,
+          trackId: opts.track.id,
+        },
+        delivery: "reliable",
+      }).catch(() => {
+        /* meta best-effort; track still flows */
+      });
+      await this.makeOffer(remoteId, entry);
+    }
+
+    opts.track.addEventListener("ended", () => {
+      void this.unpublish(id);
+    });
+
+    return {
+      id,
+      kind: opts.kind,
+      stop: () => this.unpublish(id),
+    };
+  }
+
+  async unpublish(publicationId: string): Promise<void> {
+    const pub = this.publications.get(publicationId);
+    if (!pub) return;
+    this.publications.delete(publicationId);
+
+    for (const remoteId of pub.targets) {
+      const entry = this.peers.get(remoteId);
+      if (!entry) continue;
+      const sender = entry.senders.get(publicationId);
+      if (sender) {
+        try {
+          entry.pc.removeTrack(sender);
+        } catch {
+          /* ignore */
+        }
+        entry.senders.delete(publicationId);
+      }
+      void this.sendJson(remoteId, {
+        v: 1,
+        id: `end_${publicationId}`,
+        name: "vcc.media.ended",
+        type: "system",
+        ts: Date.now(),
+        to: remoteId,
+        payload: { publicationId },
+        delivery: "reliable",
+      }).catch(() => undefined);
+      void this.makeOffer(remoteId, entry);
+    }
+
+    try {
+      pub.track.stop();
+    } catch {
+      /* ignore */
+    }
+  }
+
   close(): void {
     this.closed = true;
+    for (const id of [...this.publications.keys()]) {
+      void this.unpublish(id);
+    }
     for (const id of [...this.peers.keys()]) this.teardownPeer(id);
   }
 
@@ -172,6 +300,7 @@ export class PeerMesh {
       makingOffer: false,
       ignoreOffer: false,
       polite,
+      senders: new Map(),
     };
     this.peers.set(remoteId, entry);
 
@@ -188,11 +317,35 @@ export class PeerMesh {
       }
     };
 
+    pc.ontrack = (ev) => {
+      const track = ev.track;
+      const stream = ev.streams[0] ?? new MediaStream([track]);
+      const publicationId = track.id;
+      this.opts.onTrack({
+        track,
+        stream,
+        from: remoteId,
+        publicationId,
+        label: track.label,
+      });
+      track.addEventListener("ended", () => {
+        this.opts.onTrackEnded(publicationId, remoteId);
+      });
+    };
+
     pc.ondatachannel = (ev) => {
       if (ev.channel.label === DC_LABEL) {
         this.bindDc(entry, ev.channel);
       }
     };
+
+    // Attach any already-published local tracks to a newly linked peer.
+    for (const pub of this.publications.values()) {
+      if (pub.targets.includes(remoteId) || pub.targets.length === 0) {
+        const sender = pc.addTrack(pub.track, pub.stream);
+        entry.senders.set(pub.id, sender);
+      }
+    }
 
     if (!polite) {
       // Controller creates the DataChannel and offers.

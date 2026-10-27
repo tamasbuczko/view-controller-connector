@@ -33,7 +33,7 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 | S2 | Core Session: prepare, create, join, events, catalog | DONE (alap; media stub) |
 | S3 | ConnectionMode + QR párosítás lifecycle | DONE |
 | S4 | DataChannel üzenetek (relay kivezetése) | DONE |
-| S5 | WebRTC P2P média publish/subscribe | TODO |
+| S5 | WebRTC P2P média publish/subscribe | DONE |
 | S6 | Conflict + kick/disconnect policy | TODO |
 | S7 | Local record + replay (video-ref) | TODO |
 | S8 | `@vcc/ui` teljes shellek (demo-ux) | TODO |
@@ -169,6 +169,8 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 6. **PASS** ha 2–5 igaz (4 opcionális multi-cam).  
 7. **Security:** media nem megy a PHP hoston keresztül (csak P2P / TURN).
 
+**Státusz:** DONE — `publishMedia` / `unpublishMedia` / `track` / `trackEnded` a PeerMesh-en. Demó: `/view-video.php`, `/controller-camera.php`. Automata: `test-s5.html` (canvas.captureStream, no cam permission).
+
 ---
 
 ## S6 — Conflict + disconnect policy
@@ -289,10 +291,10 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 
 ## Jelenlegi helyzet (rövid)
 
-- **S0–S4:** zöld (`pnpm test:s3`; `test-s4.html` DataChannel).  
-- **S5–S12:** TODO — hátralévő megvalósítás.  
+- **S0–S5:** zöld (`pnpm test:s3`; `test-s4.html`; `test-s5.html`).  
+- **S6–S12:** TODO — hátralévő megvalósítás.  
 - A kérdésre („kész a modul?”): **nem**, amíg S12 PASS nincs.
 
 ## Következő konkrét lépés
 
-**S5** (WebRTC P2P média publish/subscribe).
+**S6** (Conflict + disconnect policy).

@@ -146,6 +146,8 @@ export interface PublishMediaOpts {
 export interface MediaPublication {
   id: string;
   kind: string;
+  /** Local MediaStream when the SDK acquired or was given one. */
+  stream?: MediaStream;
   stop(): Promise<void>;
 }
 

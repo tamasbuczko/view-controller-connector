@@ -533,7 +533,25 @@ class SessionImpl implements Session {
           this.emitError(e);
         }
       },
-      onMessage: (m) => this.emitter.emit("message", m),
+      onMessage: (m) => {
+        if (m.name === "vcc.media.ended" && m.payload) {
+          const publicationId = String(
+            (m.payload as { publicationId?: string }).publicationId ?? "",
+          );
+          if (publicationId) {
+            this.emitter.emit("trackEnded", publicationId, m.from);
+          }
+          return;
+        }
+        if (m.name === "vcc.media.meta") {
+          // Reserved for richer track mapping; ontrack already emits.
+          return;
+        }
+        this.emitter.emit("message", m);
+      },
+      onTrack: (e) => this.emitter.emit("track", e),
+      onTrackEnded: (publicationId, from) =>
+        this.emitter.emit("trackEnded", publicationId, from),
       onIceFailed: () => {
         this.emitError(
           new VccClientError("ICE_FAILED", "peer connection failed", {
@@ -545,15 +563,73 @@ class SessionImpl implements Session {
     return this.mesh;
   }
 
-  async publishMedia(_opts: PublishMediaOpts): Promise<MediaPublication> {
-    throw new VccClientError(
-      "NOT_IMPLEMENTED",
-      "WebRTC publishMedia lands in next iteration",
-    );
+  async publishMedia(opts: PublishMediaOpts): Promise<MediaPublication> {
+    const mesh = this.ensureMesh();
+    if (!mesh) {
+      throw new VccClientError(
+        "POLICY_DENIED",
+        "publishMedia requires View or Controller role with PeerMesh",
+      );
+    }
+
+    let track = opts.track;
+    let stream = opts.stream;
+    if (!track) {
+      try {
+        if (opts.kind === "screen") {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: false,
+          });
+        } else if (opts.kind === "microphone") {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } else if (opts.kind === "camera") {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        } else {
+          throw new VccClientError(
+            "CONFIG_INVALID",
+            "custom publishMedia requires track or stream",
+          );
+        }
+        track = stream.getTracks()[0];
+      } catch (e) {
+        if (e instanceof VccClientError) throw e;
+        throw new VccClientError(
+          "MEDIA_DENIED",
+          e instanceof Error ? e.message : "getUserMedia denied",
+          { cause: e },
+        );
+      }
+    }
+    if (!track) {
+      throw new VccClientError("MEDIA_DENIED", "no media track available");
+    }
+    if (!stream) {
+      stream = new MediaStream([track]);
+    }
+
+    const pub = await mesh.publishTrack({
+      kind: opts.kind,
+      track,
+      stream,
+      to: opts.to,
+      label: opts.label,
+    });
+    return {
+      id: pub.id,
+      kind: pub.kind,
+      stream,
+      stop: () => pub.stop(),
+    };
   }
 
-  async unpublishMedia(_publicationId: string): Promise<void> {
-    throw new VccClientError("NOT_IMPLEMENTED", "unpublishMedia not ready");
+  async unpublishMedia(publicationId: string): Promise<void> {
+    const mesh = this.mesh;
+    if (!mesh) return;
+    await mesh.unpublish(publicationId);
   }
 
   async startLocalRecording(_opts?: RecordOpts): Promise<void> {

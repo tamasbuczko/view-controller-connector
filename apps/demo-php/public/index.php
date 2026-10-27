@@ -41,6 +41,8 @@ declare(strict_types=1);
       <a href="/observer.php">Observer</a>
       <a href="/view-scoreboard.php">View — Scoreboard</a>
       <a href="/controller-score.php">Controller — Score</a>
+      <a href="/view-video.php">View — Video</a>
+      <a href="/controller-camera.php">Controller — Camera</a>
     </div>
   </main>
 </body>
