@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+vendor/
+
+# builds
+dist/
+build/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs / caches
+*.log
+npm-debug.log*
+.pnpm-store/
+.cache/
+.turbo/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# PHP / local
+*.local.php
