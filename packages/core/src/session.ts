@@ -2,6 +2,7 @@ import { ConflictBoard, denyUnlessKickAllowed } from "./conflict.js";
 import { Emitter } from "./emitter.js";
 import { toVccError, VccClientError } from "./errors.js";
 import { PeerMesh } from "./peer-mesh.js";
+import { LocalRecorder } from "./recording.js";
 import { SignalingClient } from "./signaling-client.js";
 import type {
   ConnectionMode,
@@ -91,6 +92,11 @@ class SessionImpl implements Session {
   private topology: TopologySnapshot = emptyTopology();
   private mesh: PeerMesh | null = null;
   private readonly conflicts = new ConflictBoard();
+  private readonly remoteTracks = new Map<
+    string,
+    { track: MediaStreamTrack; stream: MediaStream }
+  >();
+  private recorder: LocalRecorder | null = null;
   private pending = new Map<
     string,
     { resolve: (v: unknown) => void; reject: (e: unknown) => void }
@@ -633,9 +639,17 @@ class SessionImpl implements Session {
         }
         this.emitter.emit("message", m);
       },
-      onTrack: (e) => this.emitter.emit("track", e),
-      onTrackEnded: (publicationId, from) =>
-        this.emitter.emit("trackEnded", publicationId, from),
+      onTrack: (e) => {
+        this.remoteTracks.set(e.publicationId, {
+          track: e.track,
+          stream: e.stream,
+        });
+        this.emitter.emit("track", e);
+      },
+      onTrackEnded: (publicationId, from) => {
+        this.remoteTracks.delete(publicationId);
+        this.emitter.emit("trackEnded", publicationId, from);
+      },
       onIceFailed: () => {
         this.emitError(
           new VccClientError("ICE_FAILED", "peer connection failed", {
@@ -776,20 +790,61 @@ class SessionImpl implements Session {
     await mesh.unpublish(publicationId);
   }
 
-  async startLocalRecording(_opts?: RecordOpts): Promise<void> {
-    throw new VccClientError("NOT_IMPLEMENTED", "recording not ready");
+  async startLocalRecording(opts?: RecordOpts): Promise<void> {
+    const stream = this.composeRecordStream(opts);
+    if (!this.recorder) {
+      this.recorder = new LocalRecorder({
+        maxWindowSeconds: Math.max(opts?.windowSeconds ?? 30, 30),
+        onActiveChange: (active) => this.emitter.emit("recording", { active }),
+        onError: (e) => this.emitError(e),
+      });
+    }
+    this.recorder.start(stream, opts);
   }
 
   async stopLocalRecording(): Promise<void> {
-    throw new VccClientError("NOT_IMPLEMENTED", "recording not ready");
+    await this.recorder?.stop();
   }
 
-  async openReplay(_query: ReplayQuery): Promise<ReplaySession> {
-    throw new VccClientError("NOT_IMPLEMENTED", "replay not ready");
+  async openReplay(query: ReplayQuery): Promise<ReplaySession> {
+    if (!this.recorder) {
+      throw new VccClientError("RECORDING_FAILED", "recording was never started");
+    }
+    // Live recording continues — replay uses a separate Blob URL.
+    return this.recorder.openReplay({
+      lastSeconds: query.lastSeconds ?? 6,
+      fromTs: query.fromTs,
+      toTs: query.toTs,
+      trackIds: query.trackIds,
+    });
+  }
+
+  private composeRecordStream(opts?: RecordOpts): MediaStream {
+    const ids = opts?.trackIds;
+    const entries = [...this.remoteTracks.entries()];
+    const picked = ids?.length
+      ? entries.filter(([id]) => ids.includes(id))
+      : entries;
+    if (!picked.length) {
+      throw new VccClientError(
+        "RECORDING_FAILED",
+        "no remote tracks to record — wait for incoming media",
+      );
+    }
+    const stream = new MediaStream();
+    for (const [, { track }] of picked) {
+      stream.addTrack(track);
+    }
+    return stream;
   }
 
   async destroy(): Promise<void> {
     this.setStatus("closing");
+    try {
+      await this.stopLocalRecording();
+    } catch {
+      /* ignore */
+    }
     try {
       await this.leave();
     } catch {
@@ -797,6 +852,7 @@ class SessionImpl implements Session {
     }
     this.mesh?.close();
     this.mesh = null;
+    this.remoteTracks.clear();
     this.signaling?.close();
     this.signaling = null;
     this.emitter.clear();

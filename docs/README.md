@@ -36,4 +36,4 @@
 
 - Tervezés + API: kész  
 - Megvalósítási terv + tesztek: [`implementation-plan.md`](implementation-plan.md)  
-- Kód: S0–S6 kész (`pnpm test:s3`, `test-s4/s5/s6.html`); S7–S12 hátravan → modul még **nem** „kész”  
+- Kód: S0–S7 kész; S8–S12 hátravan → modul még **nem** „kész”  

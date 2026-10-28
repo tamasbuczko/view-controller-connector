@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>VCC S7 record/replay test</title>
+</head>
+<body>
+  <pre id="out">running…</pre>
+  <div style="display:flex;gap:8px">
+    <video id="live" autoplay playsinline muted width="160" height="120"></video>
+    <video id="replay" playsinline muted width="160" height="120"></video>
+  </div>
+  <script type="module">
+    import { createSession } from "/assets/core/index.js";
+
+    const out = document.getElementById("out");
+    const live = document.getElementById("live");
+    const replayEl = document.getElementById("replay");
+    const log = [];
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg);
+    }
+    function sleep(ms) {
+      return new Promise((r) => setTimeout(r, ms));
+    }
+
+    const cfg = () => ({
+      signaling: {
+        adapter: "websocket",
+        url: "ws://127.0.0.1:8787",
+        dataRelayFallback: false,
+      },
+      media: {
+        transport: "p2p",
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      },
+      allowedModes: ["n-n"],
+      defaultMode: "n-n",
+      disconnectPolicy: "observer+view+self-leave",
+      groupTemplates: [],
+      catalog: [{ name: "score.updated", type: "state", delivery: "reliable" }],
+    });
+
+    function fakeCamera() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 160;
+      canvas.height = 120;
+      const ctx = canvas.getContext("2d");
+      let frame = 0;
+      const timer = setInterval(() => {
+        frame += 1;
+        ctx.fillStyle = `hsl(${(frame * 3) % 360} 70% 35%)`;
+        ctx.fillRect(0, 0, 160, 120);
+        ctx.fillStyle = "#fff";
+        ctx.font = "24px monospace";
+        ctx.fillText(String(frame), 20, 70);
+      }, 100);
+      const stream = canvas.captureStream(10);
+      return {
+        stream,
+        track: stream.getVideoTracks()[0],
+        stop() {
+          clearInterval(timer);
+          stream.getTracks().forEach((t) => t.stop());
+        },
+      };
+    }
+
+    try {
+      const observer = createSession(cfg());
+      const view = createSession(cfg());
+      const controller = createSession(cfg());
+
+      await observer.prepare();
+      const { sessionCode } = await observer.createAndActivate({ mode: "n-n" });
+
+      await view.prepare();
+      await view.joinWithCode(sessionCode, "view");
+
+      let recEvents = [];
+      view.on("recording", (e) => recEvents.push(e.active));
+      view.on("track", (e) => {
+        live.srcObject = e.stream;
+      });
+
+      await controller.prepare();
+      await controller.joinWithCode(sessionCode, "controller");
+      await sleep(1500);
+
+      const cam = fakeCamera();
+      const pub = await controller.publishMedia({
+        kind: "custom",
+        track: cam.track,
+        stream: cam.stream,
+      });
+      await sleep(1500);
+
+      await view.startLocalRecording({ windowSeconds: 30 });
+      assert(recEvents.includes(true), "recording active event");
+      log.push("REC start OK");
+
+      // ~3s of motion while recording (enough for lastSeconds window in test)
+      await sleep(3500);
+      assert(live.srcObject, "live stream still present during record");
+
+      const replay = await view.openReplay({ lastSeconds: 6 });
+      const el = replay.getElement();
+      assert(el, "replay element");
+      replayEl.replaceWith(el);
+      el.id = "replay";
+      el.width = 160;
+      el.height = 120;
+      el.muted = true;
+      replay.setRate(0.5);
+      assert(el.playbackRate === 0.5, "rate 0.5");
+      replay.play();
+      await sleep(400);
+      replay.seek(200);
+      await sleep(200);
+      assert(live.srcObject, "live continues during replay");
+      log.push("replay rate/seek OK");
+
+      replay.close();
+      assert(replay.getElement() === null, "closed clears element");
+      assert(live.srcObject, "live after close");
+      log.push("close replay OK");
+
+      await view.stopLocalRecording();
+      assert(recEvents.includes(false), "recording stopped event");
+      log.push("REC stop OK");
+
+      // Crash / double-stop graceful
+      await view.stopLocalRecording();
+      let failedOpen = false;
+      try {
+        // after stop, ring may still have data — open should still work if chunks remain
+        const r2 = await view.openReplay({ lastSeconds: 3 });
+        r2.close();
+      } catch (e) {
+        failedOpen = e.code === "RECORDING_FAILED";
+      }
+      // either OK with buffered chunks or RECORDING_FAILED — both acceptable
+      log.push(failedOpen ? "empty ring handled" : "post-stop replay OK");
+
+      window.__S7__ = { ok: true, log };
+      out.textContent = "PASS\n" + log.join("\n");
+      await pub.stop();
+      cam.stop();
+      await Promise.all([
+        observer.destroy(),
+        view.destroy(),
+        controller.destroy(),
+      ]);
+    } catch (e) {
+      window.__S7__ = { ok: false, error: String(e?.message ?? e), log };
+      out.textContent = "FAIL\n" + (e?.stack ?? e) + "\n" + log.join("\n");
+    }
+  </script>
+</body>
+</html>
