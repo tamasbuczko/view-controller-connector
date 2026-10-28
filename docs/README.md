@@ -36,4 +36,4 @@
 
 - Tervezés + API: kész  
 - Megvalósítási terv + tesztek: [`implementation-plan.md`](implementation-plan.md)  
-- Kód: S0–S7 kész; S8–S12 hátravan → modul még **nem** „kész”  
+- Kód: **S0–S12 DONE** → v0.1 mag „kész” ([acceptance-v0.1.md](acceptance-v0.1.md))  

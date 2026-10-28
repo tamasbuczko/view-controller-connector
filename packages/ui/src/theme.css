@@ -7,17 +7,26 @@
   --vcc-signal: #e8a317;
   --vcc-live: #c43c22;
   --vcc-line: color-mix(in oklab, var(--vcc-ink) 12%, transparent);
+  --vcc-glow-soft: color-mix(in oklab, var(--vcc-mat) 35%, transparent);
   --font-display: "Syne", system-ui, sans-serif;
   --font-ui: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --radius: 2px;
+  --space: 8px;
 }
 
 [data-theme="vcc-demo"] {
   color: var(--vcc-ink);
-  background:
+  background-color: var(--vcc-paper);
+  background-image:
     linear-gradient(160deg, var(--vcc-mat-deep) 0%, transparent 42%),
-    var(--vcc-paper);
+    repeating-linear-gradient(
+      -28deg,
+      transparent,
+      transparent 11px,
+      color-mix(in oklab, var(--vcc-mat) 8%, transparent) 11px,
+      color-mix(in oklab, var(--vcc-mat) 8%, transparent) 12px
+    );
   font-family: var(--font-ui);
   min-height: 100vh;
 }
@@ -30,7 +39,7 @@
 
 [data-theme="vcc-demo"] .vcc-code {
   font-family: var(--font-mono);
-  font-size: 2.5rem;
+  font-size: clamp(1.75rem, 6vw, 2.75rem);
   letter-spacing: 0.12em;
 }
 
@@ -61,4 +70,77 @@
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.08em;
+}
+
+[data-theme="vcc-demo"] .vcc-status-line {
+  height: 3px;
+  background: var(--vcc-signal);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 420ms ease;
+}
+
+[data-theme="vcc-demo"] .vcc-status-line.is-live {
+  transform: scaleX(1);
+}
+
+[data-theme="vcc-demo"] .vcc-peer {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: vcc-peer-in 180ms ease forwards;
+}
+
+@keyframes vcc-peer-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-theme="vcc-demo"] .vcc-rec-dot {
+  color: var(--vcc-live);
+}
+
+[data-theme="vcc-demo"] .vcc-rec-dot[data-on="1"]::before {
+  content: "● ";
+  animation: vcc-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes vcc-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="vcc-demo"] .vcc-status-line {
+    transition: none;
+  }
+  [data-theme="vcc-demo"] .vcc-peer {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  [data-theme="vcc-demo"] .vcc-rec-dot[data-on="1"]::before {
+    animation: none;
+  }
+}
+
+[data-theme="vcc-demo"] .vcc-observer-layout {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+@media (min-width: 900px) {
+  [data-theme="vcc-demo"] .vcc-observer-layout {
+    grid-template-columns: 38% 1fr;
+    align-items: start;
+  }
+  [data-theme="vcc-demo"] .vcc-observer-layout > header,
+  [data-theme="vcc-demo"] .vcc-observer-layout > .vcc-status-wrap {
+    grid-column: 1 / -1;
+  }
 }

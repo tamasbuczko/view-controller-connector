@@ -9,6 +9,7 @@
     "dev:signaling": "pnpm --filter @vcc/signaling dev",
     "dev:demo": "pnpm --filter @vcc/demo-php start",
     "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm --filter @vcc/core test && pnpm --filter @vcc/signaling test && pnpm --filter @vcc/signaling test:s3",
     "test:s3": "pnpm --filter @vcc/signaling test:s3",
     "clean": "pnpm -r exec rimraf dist"
   },

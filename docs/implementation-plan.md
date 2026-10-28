@@ -36,11 +36,11 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 | S5 | WebRTC P2P média publish/subscribe | DONE |
 | S6 | Conflict + kick/disconnect policy | DONE |
 | S7 | Local record + replay (video-ref) | DONE |
-| S8 | `@vcc/ui` teljes shellek (demo-ux) | TODO |
-| S9 | `demo-php` teljes route-ok + 3–5 eszköz script | TODO |
-| S10 | Unit + integrációs automata tesztek | TODO |
-| S11 | Security hardening (Origin, rate limit, log maszkolás) | TODO |
-| S12 | Acceptance (mvp.md checklist) + release tag | TODO |
+| S8 | `@vcc/ui` teljes shellek (demo-ux) | DONE |
+| S9 | `demo-php` teljes route-ok + 3–5 eszköz script | DONE |
+| S10 | Unit + integrációs automata tesztek | DONE |
+| S11 | Security hardening (Origin, rate limit, log maszkolás) | DONE |
+| S12 | Acceptance (mvp.md checklist) + release tag | DONE |
 
 ---
 
@@ -295,10 +295,9 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 
 ## Jelenlegi helyzet (rövid)
 
-- **S0–S7:** zöld.  
-- **S8–S12:** TODO — hátralévő megvalósítás.  
-- A kérdésre („kész a modul?”): **nem**, amíg S12 PASS nincs.
+- **S0–S12:** DONE — lásd [acceptance-v0.1.md](acceptance-v0.1.md).  
+- A kérdésre („kész a modul?”): **igen** a v0.1 magra (SFU/PhpPoll/karate host külön).
 
 ## Következő konkrét lépés
 
-**S8–S12** (UI, demó, tesztek, security, acceptance).
+Release tag `v0.1.0`; opcionális: SFU slot, PhpPoll, karate embed.

@@ -31,10 +31,12 @@ A VCC-nél a **cyber security mindig megelőzi a kényelmet**. Érzékeny adat *
 
 ## Fejlesztői checklist
 
-- [ ] Nincs secret a commitban  
-- [ ] `.env.example` naprakész, értékek nélkül  
-- [ ] Produkciós config: WSS + Origin + erős session secret  
-- [ ] Logokban nincs pairToken / teljes SDP dump productionben (vagy maszkolva)  
-- [ ] Függőségek: ismert CVE-k ellenőrzése release előtt  
+- [x] Nincs secret a commitban (`.env` / `recordings/` gitignore)  
+- [x] `.env.example` naprakész, értékek nélkül  
+- [x] Produkció: `VCC_ENV=production` → `VCC_ALLOWED_ORIGINS` kötelező; non-local bind is  
+- [x] Logokban `pairToken` / session code maszkolva (`summarizeMsg`)  
+- [x] Signaling rate limit + max frame size  
+- [ ] Függőségek: ismert CVE-k ellenőrzése release előtt (emberi lépés)  
+
 
 Részletek: [signaling-protocol.md](signaling-protocol.md), [api-surface.md](api-surface.md), [decisions.md](decisions.md).

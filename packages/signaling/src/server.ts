@@ -1,16 +1,37 @@
 import { createServer } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
+import { summarizeMsg } from "./log.js";
+import { RateLimiter } from "./rate-limit.js";
 import { Store, type ConnectionMode, type Peer, type Role } from "./store.js";
 
 const PORT = Number(process.env.VCC_SIGNALING_PORT ?? 8787);
 const HOST = process.env.VCC_SIGNALING_HOST ?? "127.0.0.1";
+const VCC_ENV = process.env.VCC_ENV ?? "development";
 /** Comma-separated; empty = allow all (local demó only). */
 const ALLOWED_ORIGINS = (process.env.VCC_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
+const isLocalHost =
+  HOST === "127.0.0.1" || HOST === "localhost" || HOST === "::1";
+if (VCC_ENV === "production" && ALLOWED_ORIGINS.length === 0) {
+  console.error(
+    "[security] VCC_ENV=production requires VCC_ALLOWED_ORIGINS — refusing to start",
+  );
+  process.exit(1);
+}
+if (!isLocalHost && ALLOWED_ORIGINS.length === 0) {
+  console.error(
+    "[security] non-local bind requires VCC_ALLOWED_ORIGINS — refusing to start",
+  );
+  process.exit(1);
+}
+
 const store = new Store();
+/** Per-peer message rate (ICE bursts allowed via higher ceiling). */
+const rateLimit = new RateLimiter(120, 10_000);
+const MAX_FRAME = 256_000;
 
 function send(ws: WebSocket, msg: Record<string, unknown>): void {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
@@ -78,16 +99,32 @@ wss.on("connection", (ws, req) => {
   send(ws, { type: "welcome", peerId: peer.id, protocol: 1 });
 
   ws.on("message", (raw) => {
+    const bytes = typeof raw === "string" ? raw.length : Buffer.byteLength(raw as Buffer);
+    if (bytes > MAX_FRAME) {
+      ws.close(1009, "frame too large");
+      return;
+    }
+    if (!rateLimit.allow(peer.id)) {
+      fail(ws, undefined, "POLICY_DENIED", "rate limit exceeded");
+      ws.close(1008, "rate limit");
+      return;
+    }
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(String(raw)) as Record<string, unknown>;
     } catch {
       return;
     }
+    if (VCC_ENV !== "production") {
+      console.log(`[sig] ${peer.id.slice(0, 8)} ${summarizeMsg(msg)}`);
+    } else if (msg.type === "session.join" || msg.type === "pairing.mint") {
+      console.log(`[sig] ${peer.id.slice(0, 8)} ${summarizeMsg(msg)}`);
+    }
     void handle(peer, ws, msg);
   });
 
   ws.on("close", () => {
+    rateLimit.clear(peer.id);
     const sid = peer.sessionId;
     store.removePeer(peer.id);
     if (sid) {

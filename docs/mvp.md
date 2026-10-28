@@ -35,9 +35,12 @@ Szabály: következő lépés csak akkor indul, ha az előző lépés tesztje **
 
 ## Acceptance — modul „kész”
 
-- [ ] api-surface minden metódusa létezik (SFU/poll: clear `NOT_IMPLEMENTED` vagy working stub dokumentálva)  
-- [ ] Demó UX mindhárom szerepre + scoreboard + video-ref + cam  
-- [ ] 1-1, 1-n, n-1, n-n módok demózhatók  
-- [ ] Multi Controllers / multi Views a demóban kipróbálható  
-- [ ] Replay last N sec videobírón, élő stream mellett  
-- [ ] PHP embed minta README szerint másolható karatehoz  
+Részletes: [acceptance-v0.1.md](acceptance-v0.1.md).
+
+- [x] api-surface minden metódusa létezik (SFU/poll: clear `NOT_IMPLEMENTED` vagy working stub dokumentálva)  
+- [x] Demó UX mindhárom szerepre + scoreboard + video-ref + cam  
+- [x] 1-1, 1-n, n-1, n-n módok demózhatók  
+- [x] Multi Controllers / multi Views a demóban kipróbálható  
+- [x] Replay last N sec videobírón, élő stream mellett  
+- [x] PHP embed minta README szerint másolható karatehoz  
+

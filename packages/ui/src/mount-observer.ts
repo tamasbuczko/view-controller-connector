@@ -15,13 +15,15 @@ export function mountObserver(
   el.dataset.theme = "vcc-demo";
 
   const root = document.createElement("div");
-  root.className = "vcc-observer";
-  root.style.cssText =
-    "display:grid;gap:1.25rem;padding:1.5rem;max-width:960px;margin:0 auto;";
+  root.className = "vcc-observer vcc-observer-layout";
 
   const header = document.createElement("header");
   header.innerHTML = `<div class="vcc-brand" style="font-size:2rem">VCC</div>
     <div style="opacity:.75">${opts?.title ?? "Observer"}</div>`;
+
+  const statusWrap = document.createElement("div");
+  statusWrap.className = "vcc-status-wrap";
+  statusWrap.innerHTML = `<div class="vcc-status-line" data-live-line></div>`;
 
   const modeEl = document.createElement("div");
   modeEl.className = "vcc-panel";
@@ -50,15 +52,20 @@ export function mountObserver(
     <button type="button" class="vcc-btn secondary" data-act="copy-uri" style="margin-top:.5rem">URI másolása</button>
     <p style="opacity:.65;font-size:.85rem;margin:.5rem 0 0">Illeszd a Controller „pair URI” mezőjébe (QR lib a demóban opcionális).</p>`;
 
+  const left = document.createElement("div");
+  left.style.cssText = "display:grid;gap:1.25rem";
+
   const topoEl = document.createElement("div");
   topoEl.className = "vcc-panel";
-  topoEl.innerHTML = `<div class="vcc-live">TOPOLOGY</div><pre data-topo style="white-space:pre-wrap;font-family:var(--font-mono);font-size:.85rem">—</pre>`;
+  topoEl.innerHTML = `<div class="vcc-live">TOPOLOGY</div><div data-topo-list style="display:grid;gap:.5rem;margin-top:.75rem"></div><pre data-topo style="white-space:pre-wrap;font-family:var(--font-mono);font-size:.75rem;opacity:.65;margin-top:.75rem">—</pre>`;
 
   const statusEl = document.createElement("div");
   statusEl.style.opacity = "0.7";
   statusEl.textContent = `status: ${session.status}`;
+  statusWrap.append(statusEl);
 
-  root.append(header, statusEl, modeEl, codeEl, qrEl, topoEl);
+  left.append(modeEl, codeEl, qrEl);
+  root.append(header, statusWrap, left, topoEl);
   el.append(root);
 
   let lastTarget: { type: "view"; viewId: string } | { type: "group"; groupId: string } | null =
@@ -67,8 +74,13 @@ export function mountObserver(
   const unsubs = [
     session.on("status", (s) => {
       statusEl.textContent = `status: ${s}`;
+      const line = statusWrap.querySelector("[data-live-line]");
+      line?.classList.toggle("is-live", s === "active");
     }),
     session.on("topology", (t) => renderTopo(t)),
+    session.on("peerJoined", () => {
+      /* topology refresh animates peers */
+    }),
     session.on("pairingQr", (e) => {
       if (!e.visible) {
         qrEl.hidden = true;
@@ -86,6 +98,17 @@ export function mountObserver(
   function renderTopo(t: TopologySnapshot): void {
     const pre = topoEl.querySelector("[data-topo]");
     if (pre) pre.textContent = JSON.stringify(t, null, 2);
+    const list = topoEl.querySelector("[data-topo-list]");
+    if (!list) return;
+    list.innerHTML = "";
+    for (const p of t.peers) {
+      const row = document.createElement("div");
+      row.className = "vcc-peer";
+      row.style.cssText =
+        "display:flex;justify-content:space-between;gap:.5rem;border-bottom:1px solid var(--vcc-line);padding:.35rem 0";
+      row.innerHTML = `<span>${p.role}</span><span style="font-family:var(--font-mono);font-size:.8rem;color:var(--vcc-signal)">${p.id.slice(0, 8)}</span>`;
+      list.append(row);
+    }
   }
 
   qrEl.querySelector("[data-act=copy-uri]")?.addEventListener("click", () => {
