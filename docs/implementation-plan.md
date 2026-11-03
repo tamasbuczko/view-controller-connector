@@ -208,7 +208,7 @@ Kapcsolódó: [api-surface.md](api-surface.md) · [mvp.md](mvp.md) · [security.
 7. **PASS** ha 1–5 igaz.  
 8. **Security:** felvétel nem kerül gitbe / nem upload shared hostra.
 
-**Státusz:** DONE — `LocalRecorder` (MediaRecorder chunk ring) + `openReplay`; élő stream független. Demó: `/view-video.php` REC/replay sáv. Automata: `test-s7.html`.
+**Státusz:** DONE — `LocalRecorder` (finalize + seek last-N; video-only mime) + `openReplay`; forrás: élő preview `captureStream` / canvas (`CanvasRecordMixer`), nem nyers remote RTC track. Demó: `/view-video.php` REC/replay + billentyűk. Automata: `test-s7.html`.
 
 ---
 

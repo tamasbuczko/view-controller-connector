@@ -14,7 +14,7 @@ kiai.hu összekötés: **később** ([competition-source.md](competition-source.
    - Camera controller telefonok (vagy QR a video-refen)
 5. **Következő indítása** / Start egy küzdelemre — nevek a scoreboardon (host poll).
 6. Pontozás telefonon → TV frissül; desk queue score sync.
-7. Video-ref: REC + Replay 6/10s + 0.5×; **Export 10s** helyi letöltés.
+7. Video-ref: kamera kép után **auto REC** (preview `captureStream`); **R**=Replay 6s, **T**=10s, **S**=0.5×, Esc=bezárás; **Export 10s** helyi WebM.
 8. **Következő meccs** a score telefonon → host `next` + 0–0.
 
 ## Szereposztás

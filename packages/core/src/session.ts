@@ -2,6 +2,7 @@ import { ConflictBoard, denyUnlessKickAllowed } from "./conflict.js";
 import { Emitter } from "./emitter.js";
 import { toVccError, VccClientError } from "./errors.js";
 import { PeerMesh } from "./peer-mesh.js";
+import { CanvasRecordMixer } from "./canvas-record-mixer.js";
 import { LocalRecorder } from "./recording.js";
 import { SignalingClient } from "./signaling-client.js";
 import type {
@@ -99,6 +100,7 @@ class SessionImpl implements Session {
     { track: MediaStreamTrack; stream: MediaStream }
   >();
   private recorder: LocalRecorder | null = null;
+  private recordMixer: CanvasRecordMixer | null = null;
   private pending = new Map<
     string,
     { resolve: (v: unknown) => void; reject: (e: unknown) => void }
@@ -817,6 +819,10 @@ class SessionImpl implements Session {
   }
 
   async startLocalRecording(opts?: RecordOpts): Promise<void> {
+    // Restart cleanly if already recording (new source / new cameras)
+    if (this.recorder?.isActive) {
+      await this.stopLocalRecording();
+    }
     const stream = this.composeRecordStream(opts);
     if (!this.recorder) {
       this.recorder = new LocalRecorder({
@@ -825,11 +831,21 @@ class SessionImpl implements Session {
         onError: (e) => this.emitError(e),
       });
     }
+    if (this.recordMixer) {
+      const ok = await this.recordMixer.waitForFrame(3000);
+      if (!ok) {
+        // Still try — captureStream may produce frames after MediaRecorder starts
+      }
+    } else {
+      await new Promise((r) => setTimeout(r, 200));
+    }
     this.recorder.start(stream, opts);
   }
 
   async stopLocalRecording(): Promise<void> {
     await this.recorder?.stop();
+    this.recordMixer?.stop();
+    this.recordMixer = null;
   }
 
   async openReplay(query: ReplayQuery): Promise<ReplaySession> {
@@ -846,6 +862,28 @@ class SessionImpl implements Session {
   }
 
   private composeRecordStream(opts?: RecordOpts): MediaStream {
+    if (opts?.stream && opts.stream.getTracks().length) {
+      this.recordMixer?.stop();
+      this.recordMixer = null;
+      return opts.stream;
+    }
+
+    if (opts?.videos?.length && typeof document !== "undefined") {
+      try {
+        this.recordMixer?.stop();
+        this.recordMixer = new CanvasRecordMixer();
+        return this.recordMixer.startFromVideos(opts.videos, 0);
+      } catch (e) {
+        this.recordMixer?.stop();
+        this.recordMixer = null;
+        throw new VccClientError(
+          "RECORDING_FAILED",
+          e instanceof Error ? e.message : "preview capture failed",
+          { cause: e },
+        );
+      }
+    }
+
     const ids = opts?.trackIds;
     const entries = [...this.remoteTracks.entries()];
     const picked = ids?.length
@@ -857,8 +895,19 @@ class SessionImpl implements Session {
         "no remote tracks to record — wait for incoming media",
       );
     }
+    const tracks = picked.map(([, { track }]) => track);
+    if (typeof document !== "undefined") {
+      try {
+        this.recordMixer?.stop();
+        this.recordMixer = new CanvasRecordMixer();
+        return this.recordMixer.start(tracks, 0);
+      } catch {
+        this.recordMixer?.stop();
+        this.recordMixer = null;
+      }
+    }
     const stream = new MediaStream();
-    for (const [, { track }] of picked) {
+    for (const track of tracks) {
       stream.addTrack(track);
     }
     return stream;
@@ -871,6 +920,8 @@ class SessionImpl implements Session {
     } catch {
       /* ignore */
     }
+    this.recordMixer?.stop();
+    this.recordMixer = null;
     try {
       await this.leave();
     } catch {

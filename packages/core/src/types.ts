@@ -175,6 +175,10 @@ export interface RemoteTrackEvent {
 export interface RecordOpts {
   windowSeconds?: number;
   trackIds?: string[];
+  /** Prefer an explicit local stream (e.g. video.captureStream()). */
+  stream?: MediaStream;
+  /** Live preview <video> elements — drawn to canvas for MediaRecorder. */
+  videos?: HTMLVideoElement[];
 }
 
 export interface ReplayQuery {

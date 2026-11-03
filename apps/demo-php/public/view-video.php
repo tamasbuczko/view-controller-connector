@@ -73,20 +73,24 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
     const content = document.createElement("div");
     content.innerHTML = `<div class="vcc-live" style="text-align:center">VIDEO REF</div>
       <div class="rec" id="rec" data-on="0">REC off</div>
+      <div class="vcc-status" id="rec-status" style="font-size:.85rem;opacity:.85;min-height:1.2em"></div>
       <div class="ref-layout" id="layout">
         <div class="grid" id="tiles"></div>
         <div class="replay-stage" id="replay-host" hidden></div>
       </div>
-      <div class="bar">
+      <div class="bar" role="toolbar" aria-label="Replay">
         <button type="button" class="vcc-btn" id="rec-start">REC start</button>
         <button type="button" class="vcc-btn secondary" id="rec-stop">REC stop</button>
-        <button type="button" class="vcc-btn" id="replay6">Replay 6s</button>
-        <button type="button" class="vcc-btn" id="replay10">Replay 10s</button>
-        <button type="button" class="vcc-btn secondary" id="slow">0.5×</button>
+        <button type="button" class="vcc-btn" id="replay6" title="Billentyű: R">Replay 6s</button>
+        <button type="button" class="vcc-btn" id="replay10" title="Billentyű: T">Replay 10s</button>
+        <button type="button" class="vcc-btn secondary" id="slow" title="Billentyű: S">0.5×</button>
         <button type="button" class="vcc-btn secondary" id="rate1">1×</button>
         <button type="button" class="vcc-btn secondary" id="export10">Export 10s</button>
-        <button type="button" class="vcc-btn secondary" id="close-replay">Close replay</button>
-      </div>`;
+        <button type="button" class="vcc-btn secondary" id="close-replay" title="Esc">Bezárás</button>
+      </div>
+      <p class="vcc-status" style="font-size:.75rem;opacity:.65;margin-top:.35rem">
+        R = 6s · T = 10s · S = lassítás · Esc = bezárás — az élő kép közben is megy
+      </p>`;
 
     const session = createSession(window.__VCC_CONFIG__);
     mountView(document.getElementById("app"), session, {
@@ -99,15 +103,61 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
     const layout = content.querySelector("#layout");
     const tiles = content.querySelector("#tiles");
     const recEl = content.querySelector("#rec");
+    const statusEl = content.querySelector("#rec-status");
     const replayHost = content.querySelector("#replay-host");
     const videos = new Map();
     let replay = null;
     let recStarted = false;
 
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg || "";
+      statusEl.style.color = isError ? "var(--vcc-danger, #c44)" : "";
+    }
+
+    function errMsg(e) {
+      return e?.message || e?.code || String(e);
+    }
+
     session.on("recording", (e) => {
       recEl.dataset.on = e.active ? "1" : "0";
       recEl.textContent = e.active ? "REC" : "REC off";
+      if (e.active) setStatus("Felvétel fut — pár mp után replay OK");
     });
+
+    session.on("error", (e) => {
+      setStatus(errMsg(e), true);
+    });
+
+    function previewVideos() {
+      return [...videos.values()].filter((v) => v.srcObject);
+    }
+
+    async function startRecFromPreviews() {
+      const list = previewVideos();
+      if (!list.length) {
+        throw new Error("nincs élő preview video");
+      }
+      // Wait until at least one tile actually has pixels
+      await new Promise((resolve) => {
+        const t0 = Date.now();
+        const tick = () => {
+          if (list.some((v) => v.readyState >= 2 && v.videoWidth > 0)) {
+            resolve();
+            return;
+          }
+          if (Date.now() - t0 > 4000) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(tick);
+        };
+        tick();
+      });
+      await session.startLocalRecording({
+        windowSeconds: 60,
+        videos: previewVideos(),
+      });
+    }
 
     session.on("track", (e) => {
       let video = videos.get(e.publicationId);
@@ -121,10 +171,17 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
         videos.set(e.publicationId, video);
       }
       video.srcObject = e.stream;
+      void video.play().catch(() => {});
       if (!recStarted) {
         recStarted = true;
-        void session.startLocalRecording({ windowSeconds: 60 }).catch(() => {
+        void startRecFromPreviews().catch((err) => {
           recStarted = false;
+          setStatus("REC start: " + errMsg(err), true);
+        });
+      } else {
+        // New camera joined — rebuild record source from all tiles
+        void startRecFromPreviews().catch((err) => {
+          setStatus("REC refresh: " + errMsg(err), true);
         });
       }
     });
@@ -139,16 +196,30 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
     });
 
     async function openReplay(lastSeconds) {
-      if (replay) replay.close();
-      replay = await session.openReplay({ lastSeconds });
-      const el = replay.getElement();
-      if (!el) return;
-      el.muted = true;
-      el.controls = true;
-      replayHost.hidden = false;
-      layout.classList.add("reviewing");
-      replayHost.replaceChildren(el);
-      replay.play();
+      try {
+        if (replay) replay.close();
+        setStatus("Replay betöltése…");
+        replay = await session.openReplay({ lastSeconds });
+        const el = replay.getElement();
+        if (!el) {
+          setStatus("Replay: üres elem", true);
+          return;
+        }
+        el.muted = false;
+        el.controls = true;
+        el.addEventListener("error", () => {
+          setStatus("Replay lejátszás hiba (WebM)", true);
+        }, { once: true });
+        el.addEventListener("playing", () => {
+          setStatus(`Replay ${lastSeconds}s`);
+        }, { once: true });
+        replayHost.hidden = false;
+        layout.classList.add("reviewing");
+        replayHost.replaceChildren(el);
+        replay.play();
+      } catch (err) {
+        setStatus("Replay: " + errMsg(err), true);
+      }
     }
 
     function closeReplay() {
@@ -157,28 +228,37 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
       replayHost.replaceChildren();
       replayHost.hidden = true;
       layout.classList.remove("reviewing");
+      setStatus("");
     }
 
     async function exportClip(lastSeconds) {
-      const r = await session.openReplay({ lastSeconds });
-      const el = r.getElement();
-      const src = el?.src;
-      if (!src) {
-        r.close();
-        return;
+      try {
+        const r = await session.openReplay({ lastSeconds });
+        const el = r.getElement();
+        const src = el?.src;
+        if (!src) {
+          r.close();
+          setStatus("Export: nincs media", true);
+          return;
+        }
+        const a = document.createElement("a");
+        a.href = src;
+        const tatami = window.__VCC_TATAMI__ || "mat";
+        a.download = `vcc-${tatami}-${Date.now()}-${lastSeconds}s.webm`;
+        a.click();
+        setTimeout(() => r.close(), 1500);
+        setStatus("Export indítva");
+      } catch (err) {
+        setStatus("Export: " + errMsg(err), true);
       }
-      const a = document.createElement("a");
-      a.href = src;
-      const tatami = window.__VCC_TATAMI__ || "mat";
-      a.download = `vcc-${tatami}-${Date.now()}-${lastSeconds}s.webm`;
-      a.click();
-      // Keep object URL briefly for download, then revoke via close
-      setTimeout(() => r.close(), 1500);
     }
 
     content.querySelector("#rec-start").onclick = () => {
       recStarted = true;
-      void session.startLocalRecording({ windowSeconds: 60 });
+      void startRecFromPreviews().catch((err) => {
+        recStarted = false;
+        setStatus("REC start: " + errMsg(err), true);
+      });
     };
     content.querySelector("#rec-stop").onclick = () => {
       void session.stopLocalRecording();
@@ -186,10 +266,36 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
     };
     content.querySelector("#replay6").onclick = () => void openReplay(6);
     content.querySelector("#replay10").onclick = () => void openReplay(10);
-    content.querySelector("#slow").onclick = () => replay?.setRate(0.5);
-    content.querySelector("#rate1").onclick = () => replay?.setRate(1);
+    content.querySelector("#slow").onclick = () => {
+      replay?.setRate(0.5);
+      setStatus("Lassítás 0.5×");
+    };
+    content.querySelector("#rate1").onclick = () => {
+      replay?.setRate(1);
+      setStatus("Sebesség 1×");
+    };
     content.querySelector("#export10").onclick = () => void exportClip(10);
     content.querySelector("#close-replay").onclick = () => closeReplay();
+
+    window.addEventListener("keydown", (ev) => {
+      const tag = (ev.target && ev.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const k = ev.key.toLowerCase();
+      if (k === "r") {
+        ev.preventDefault();
+        void openReplay(6);
+      } else if (k === "t") {
+        ev.preventDefault();
+        void openReplay(10);
+      } else if (k === "s" && replay) {
+        ev.preventDefault();
+        replay.setRate(0.5);
+        setStatus("Lassítás 0.5×");
+      } else if (k === "escape" && replay) {
+        ev.preventDefault();
+        closeReplay();
+      }
+    });
   </script>
 </body>
 </html>

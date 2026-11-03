@@ -51,7 +51,8 @@ $config = require dirname(__DIR__) . '/config.php';
         <p class="comp-pane-label" style="margin-top:1.75rem">Eszközök</p>
         <div class="comp-device-links" id="device-links"></div>
         <p class="comp-hint">
-          TV: scoreboard · Laptop 2. ablak: video-ref · Telefon: score · Kamerák: QR a video-refen.
+          TV: scoreboard · Laptop 2. ablak: <strong>video-ref</strong> (auto REC, R=6s / T=10s replay) ·
+          Telefon: score · Kamerák: QR a video-refen.
           Minden eszköz ugyanazon a Wi‑Fin / hotspoton.
         </p>
       </aside>
