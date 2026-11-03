@@ -17,6 +17,7 @@ import type {
   ReplaySession,
   Role,
   SessionEvents,
+  SessionListItem,
   SessionStatus,
   TopologySnapshot,
   VccConfig,
@@ -48,6 +49,7 @@ export interface Session {
     sessionId: string;
     sessionCode: string;
   }>;
+  listSessions(): Promise<SessionListItem[]>;
   setMode(mode: ConnectionMode): Promise<void>;
   defineGroup(groupId: string, memberViewIds: string[]): Promise<void>;
   deactivate(): Promise<void>;
@@ -145,12 +147,14 @@ class SessionImpl implements Session {
 
   async prepare(): Promise<void> {
     if (this._status === "preparing" || this._status === "active") return;
+    if (this.signaling) return;
     this.setStatus("preparing");
     try {
       this.signaling = new SignalingClient(
         this.config.signaling.url,
         (msg) => this.handleSignal(msg),
         () => {
+          this.signaling = null;
           if (this._status !== "closed" && this._status !== "idle") {
             this.emitError(
               new VccClientError(
@@ -166,6 +170,7 @@ class SessionImpl implements Session {
       this.signaling.send({ type: "hello", protocol: 1 });
       this.setStatus("idle");
     } catch (e) {
+      this.signaling = null;
       this.setStatus("idle");
       this.emitError(e);
       throw e;
@@ -345,6 +350,14 @@ class SessionImpl implements Session {
     this.topology = emptyTopology(this._id, mode);
     // Observer does not mesh for S4 data path (controllers ↔ views).
     return { sessionId: this._id, sessionCode: this._sessionCode };
+  }
+
+  async listSessions(): Promise<SessionListItem[]> {
+    const res = await this.request<{ sessions?: SessionListItem[] }>(
+      "session.list",
+      {},
+    );
+    return Array.isArray(res.sessions) ? res.sessions : [];
   }
 
   async setMode(mode: ConnectionMode): Promise<void> {
@@ -701,16 +714,29 @@ class SessionImpl implements Session {
     let track = opts.track;
     let stream = opts.stream;
     if (!track) {
+      const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+      if (!devices?.getUserMedia) {
+        throw new VccClientError(
+          "MEDIA_DENIED",
+          "Kamera nem elérhető: a böngésző csak HTTPS (vagy localhost) alatt engedi. Nyisd a demót https://… címen.",
+        );
+      }
       try {
         if (opts.kind === "screen") {
-          stream = await navigator.mediaDevices.getDisplayMedia({
+          if (!devices.getDisplayMedia) {
+            throw new VccClientError(
+              "MEDIA_DENIED",
+              "getDisplayMedia nem támogatott ebben a böngészőben",
+            );
+          }
+          stream = await devices.getDisplayMedia({
             video: true,
             audio: false,
           });
         } else if (opts.kind === "microphone") {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream = await devices.getUserMedia({ audio: true });
         } else if (opts.kind === "camera") {
-          stream = await navigator.mediaDevices.getUserMedia({
+          stream = await devices.getUserMedia({
             video: true,
             audio: false,
           });

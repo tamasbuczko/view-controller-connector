@@ -1,11 +1,36 @@
 <?php
 declare(strict_types=1);
 
-/** Demo VccConfig — no secrets. Signaling is local ws. */
+/** Demo VccConfig — no secrets. Signaling follows the page host when possible. */
+$envSig = getenv('VCC_SIGNALING_URL');
+if (is_string($envSig) && $envSig !== '') {
+    $signalingUrl = $envSig;
+} else {
+    $httpHost = $_SERVER['HTTP_X_FORWARDED_HOST']
+        ?? $_SERVER['HTTP_HOST']
+        ?? '127.0.0.1:8080';
+    // May be a comma-separated list if multiple proxies
+    $httpHost = trim(explode(',', $httpHost, 2)[0]);
+    $hostOnly = explode(':', $httpHost, 2)[0];
+    if ($hostOnly === '' || $hostOnly === 'localhost') {
+        $hostOnly = '127.0.0.1';
+    }
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+        || (isset($_SERVER['SERVER_PORT']) && (string) $_SERVER['SERVER_PORT'] === '8443');
+    if ($https) {
+        // Same-origin WSS via LAN HTTPS gateway — phone/Safari needs one cert origin.
+        $port = $_SERVER['HTTP_X_FORWARDED_PORT'] ?? '8443';
+        $signalingUrl = 'wss://' . $hostOnly . ':' . $port;
+    } else {
+        $signalingUrl = 'ws://' . $hostOnly . ':8787';
+    }
+}
+
 return [
     'signaling' => [
         'adapter' => 'websocket',
-        'url' => getenv('VCC_SIGNALING_URL') ?: 'ws://127.0.0.1:8787',
+        'url' => $signalingUrl,
     ],
     'media' => [
         'transport' => 'p2p',

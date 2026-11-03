@@ -27,7 +27,8 @@ A VCC-nél a **cyber security mindig megelőzi a kényelmet**. Érzékeny adat *
 9. **disconnectPolicy** — kick csak config szerint.  
 10. **Média:** P2P (nem a PHP hoston); TURN credential short-lived, ha van.  
 11. **Replay buffer** helyi eszközön — ne töltsünk fel shared hostra review közben.  
-12. **Nincs publikus session lista.**
+12. **Nincs publikus session lista** produkcióban — `session.list` csak local demó / `VCC_ALLOW_SESSION_LIST=1`.  
+13. **`signal.relay` session-scoped** — SDP/ICE csak azonos session peerjeinek.
 
 ## Fejlesztői checklist
 
@@ -36,6 +37,8 @@ A VCC-nél a **cyber security mindig megelőzi a kényelmet**. Érzékeny adat *
 - [x] Produkció: `VCC_ENV=production` → `VCC_ALLOWED_ORIGINS` kötelező; non-local bind is  
 - [x] Logokban `pairToken` / session code maszkolva (`summarizeMsg`)  
 - [x] Signaling rate limit + max frame size  
+- [x] `signal.relay` same-session check  
+- [x] `session.list` kapu (nem publikus directory)  
 - [ ] Függőségek: ismert CVE-k ellenőrzése release előtt (emberi lépés)  
 
 

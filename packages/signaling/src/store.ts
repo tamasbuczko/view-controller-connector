@@ -38,9 +38,22 @@ export interface SessionRoom {
   code: string;
   mode: ConnectionMode;
   active: boolean;
+  createdAt: number;
   groups: Map<string, string[]>;
   links: Link[];
   pairTokens: Map<string, PairTokenEntry>;
+}
+
+export interface SessionListItem {
+  id: string;
+  code: string;
+  mode: ConnectionMode;
+  peerCounts: {
+    observer: number;
+    view: number;
+    controller: number;
+  };
+  createdAt: number;
 }
 
 export function isSingleUseMode(mode: ConnectionMode): boolean {
@@ -80,6 +93,7 @@ export class Store {
       code,
       mode,
       active: true,
+      createdAt: Date.now(),
       groups: new Map(),
       links: [],
       pairTokens: new Map(),
@@ -94,6 +108,28 @@ export class Store {
   findByCode(code: string): SessionRoom | undefined {
     const id = this.codeIndex.get(code.toUpperCase());
     return id ? this.sessions.get(id) : undefined;
+  }
+
+  listActiveSessions(): SessionListItem[] {
+    const out: SessionListItem[] = [];
+    for (const room of this.sessions.values()) {
+      if (!room.active) continue;
+      const counts = { observer: 0, view: 0, controller: 0 };
+      for (const p of this.peersInSession(room.id)) {
+        if (p.role === "observer") counts.observer += 1;
+        else if (p.role === "view") counts.view += 1;
+        else if (p.role === "controller") counts.controller += 1;
+      }
+      out.push({
+        id: room.id,
+        code: room.code,
+        mode: room.mode,
+        peerCounts: counts,
+        createdAt: room.createdAt,
+      });
+    }
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    return out;
   }
 
   peersInSession(sessionId: string): Peer[] {

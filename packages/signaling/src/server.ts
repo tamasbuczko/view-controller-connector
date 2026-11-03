@@ -1,4 +1,6 @@
-import { createServer } from "node:http";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
+import { existsSync, readFileSync } from "node:fs";
 import { WebSocketServer, type WebSocket } from "ws";
 import { summarizeMsg } from "./log.js";
 import { RateLimiter } from "./rate-limit.js";
@@ -6,6 +8,16 @@ import { Store, type ConnectionMode, type Peer, type Role } from "./store.js";
 
 const PORT = Number(process.env.VCC_SIGNALING_PORT ?? 8787);
 const HOST = process.env.VCC_SIGNALING_HOST ?? "127.0.0.1";
+const TLS_CERT = process.env.VCC_TLS_CERT ?? "";
+const TLS_KEY = process.env.VCC_TLS_KEY ?? "";
+const useTls =
+  Boolean(TLS_CERT && TLS_KEY && existsSync(TLS_CERT) && existsSync(TLS_KEY));
+/** Advertised WS URL in pair payloads (must be reachable by clients). */
+const PUBLIC_WS =
+  process.env.VCC_PUBLIC_WS_URL ??
+  (HOST === "0.0.0.0" || HOST === "::"
+    ? `${useTls ? "wss" : "ws"}://127.0.0.1:${PORT}`
+    : `${useTls ? "wss" : "ws"}://${HOST}:${PORT}`);
 const VCC_ENV = process.env.VCC_ENV ?? "development";
 /** Comma-separated; empty = allow all (local demó only). */
 const ALLOWED_ORIGINS = (process.env.VCC_ALLOWED_ORIGINS ?? "")
@@ -81,10 +93,23 @@ function originOk(origin: string | undefined): boolean {
   return ALLOWED_ORIGINS.includes(origin);
 }
 
-const httpServer = createServer((_req, res) => {
+const requestHandler = (
+  _req: import("node:http").IncomingMessage,
+  res: import("node:http").ServerResponse,
+): void => {
   res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
   res.end("VCC signaling OK\n");
-});
+};
+
+const httpServer = useTls
+  ? createHttpsServer(
+      {
+        cert: readFileSync(TLS_CERT),
+        key: readFileSync(TLS_KEY),
+      },
+      requestHandler,
+    )
+  : createHttpServer(requestHandler);
 
 const wss = new WebSocketServer({ server: httpServer });
 
@@ -158,6 +183,27 @@ async function handle(
         mode: room.mode,
       });
       broadcastTopology(room.id);
+      return;
+    }
+
+    case "session.list": {
+      // Demo UX only — not a public directory (docs/security.md).
+      const allowList =
+        process.env.VCC_ALLOW_SESSION_LIST === "1" ||
+        process.env.VCC_ALLOW_SESSION_LIST === "true" ||
+        (VCC_ENV !== "production" && isLocalHost);
+      if (!allowList) {
+        return fail(
+          ws,
+          reqId,
+          "POLICY_DENIED",
+          "session list disabled (set VCC_ALLOW_SESSION_LIST=1 for demos)",
+        );
+      }
+      reply(ws, reqId, {
+        type: "session.listed",
+        sessions: store.listActiveSessions(),
+      });
       return;
     }
 
@@ -319,7 +365,7 @@ async function handle(
         groupId?: string;
       };
       const pairToken = store.mintPairToken(room, target);
-      const signalingUrl = `ws://${HOST}:${PORT}`;
+      const signalingUrl = PUBLIC_WS;
       const targetKey =
         target.type === "group"
           ? `group:${target.groupId}`
@@ -412,6 +458,14 @@ async function handle(
       if (!dest) {
         return fail(ws, reqId, "SESSION_NOT_FOUND", "peer missing");
       }
+      if (!peer.sessionId || dest.sessionId !== peer.sessionId) {
+        return fail(
+          ws,
+          reqId,
+          "POLICY_DENIED",
+          "signal.relay only within same session",
+        );
+      }
       send(dest.ws, {
         type: "signal.relay",
         fromPeerId: peer.id,
@@ -473,7 +527,9 @@ function linkController(
 }
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`VCC signaling listening on ws://${HOST}:${PORT}`);
+  const scheme = useTls ? "wss" : "ws";
+  console.log(`VCC signaling listening on ${scheme}://${HOST}:${PORT}`);
+  console.log(`Public pair URL base: ${PUBLIC_WS}`);
   if (ALLOWED_ORIGINS.length === 0) {
     console.warn(
       "[security] VCC_ALLOWED_ORIGINS empty — all origins allowed (local demó only)",

@@ -40,9 +40,26 @@ pnpm dev:demo
 5. [controller-camera.php](http://127.0.0.1:8080/controller-camera.php) → kód → **Kamera start**  
 6. Video-ref: **REC start** → pár mp → **Replay last 6s** (élő marad)
 
-### Pair URI (QR helyett)
+### Pair URI + QR
 
-Observer: View join után **QR (első View)** → URI másolása → Controller **Pair URI**.
+Observer: View join után **QR (első View)** → beolvasás a Controlleren, vagy URI másolása → **Pair URI**.
+
+View / Controller: meglévő sessionök a **session listából** is választhatók (local demó).
+
+### Telefon / LAN (HTTPS + kamera)
+
+A böngésző `mediaDevices` csak **secure context**-ben (HTTPS vagy localhost). Telefonon:
+
+```bash
+pnpm certs:lan          # egyszer: certs/ (gitignore)
+# 3 terminál:
+pnpm dev:lan-signaling  # ws://127.0.0.1:8787, pair URL → wss://LAN:8443
+pnpm --filter @vcc/demo-php run start:lan   # PHP :8080
+pnpm dev:lan-gateway    # https://0.0.0.0:8443 → PHP + WS
+```
+
+Telefon: **https://\<LAN-IP\>:8443** (ne http) — fogadd el a self-signed certet.  
+LAN IP: `VCC_LAN_IP` env (default `192.168.1.118` a scriptekben).
 
 ## Tesztek
 
@@ -58,8 +75,10 @@ Másold `.env.example` → `.env` (gitignore). Produkcióban állítsd:
 
 - `VCC_ALLOWED_ORIGINS` — kötelező nem-local Origin lista  
 - `VCC_SIGNALING_PORT` / `VCC_SIGNALING_HOST`
+- `VCC_ALLOW_SESSION_LIST=1` — demó session picker (produkcióban alapból ki)
+- `VCC_LAN_IP` — LAN HTTPS / pair URL
 
-**Ne** commitolj TURN jelszót / `.env`-et / `recordings/` tartalmat.
+**Ne** commitolj TURN jelszót / `.env`-et / `certs/` / `recordings/` tartalmat.
 
 ## Dokumentáció
 

@@ -14,13 +14,18 @@
   },
   "files": ["dist", "src/theme.css"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean && node ./scripts/copy-css.mjs",
+    "build": "tsup && node ./scripts/copy-css.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
     "@vcc/core": "workspace:*"
   },
+  "dependencies": {
+    "html5-qrcode": "^2.3.8",
+    "qrcode": "^1.5.4"
+  },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@vcc/core": "workspace:*",
     "tsup": "^8.4.0",
     "typescript": "^5.8.2"

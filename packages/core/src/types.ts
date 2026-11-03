@@ -115,6 +115,19 @@ export interface TopologySnapshot {
   }>;
 }
 
+/** Active session summary from signaling `session.list`. */
+export interface SessionListItem {
+  id: string;
+  code: string;
+  mode: ConnectionMode;
+  peerCounts: {
+    observer: number;
+    view: number;
+    controller: number;
+  };
+  createdAt: number;
+}
+
 export interface OutboundMessage {
   name: string;
   payload?: unknown;

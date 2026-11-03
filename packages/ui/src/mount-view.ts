@@ -1,4 +1,5 @@
 import type { Session } from "@vcc/core";
+import { clearQrCanvas, renderQrCanvas } from "./qr.js";
 
 export type Unmount = () => void;
 
@@ -28,6 +29,10 @@ export function mountView(
   const joinEl = document.createElement("div");
   joinEl.className = "vcc-panel";
   joinEl.innerHTML = `<div class="vcc-live">JOIN</div>
+    <select data-sessions style="font:inherit;padding:.5rem;margin-top:.5rem;width:100%;max-width:280px;box-sizing:border-box">
+      <option value="">— aktív sessionök —</option>
+    </select>
+    <button type="button" class="vcc-btn secondary" data-act="refresh-sessions" style="margin-top:.5rem">Lista frissítés</button>
     <input data-code placeholder="SESSION KÓD" maxlength="8"
       style="text-transform:uppercase;font:inherit;padding:.6rem;margin-top:.5rem;width:100%;max-width:220px;font-family:var(--font-mono)" />
     <button type="button" class="vcc-btn" data-act="join" style="margin-top:.75rem">Csatlakozás</button>`;
@@ -39,6 +44,7 @@ export function mountView(
     <button type="button" class="vcc-btn" data-act="show-qr" style="margin-top:.5rem">QR mutat</button>
     <button type="button" class="vcc-btn secondary" data-act="hide-qr" style="margin-top:.5rem;margin-left:.5rem">QR elrejt</button>
     <button type="button" class="vcc-btn secondary" data-act="copy-uri" style="margin-top:.5rem;margin-left:.5rem">URI másolása</button>
+    <div data-qr-host></div>
     <pre data-uri style="white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);font-size:.75rem;margin-top:.75rem"></pre>`;
 
   const statusEl = document.createElement("div");
@@ -52,33 +58,77 @@ export function mountView(
   root.append(header, statusEl, joinEl, qrEl, contentHost);
   el.append(root);
 
+  const codeInput = joinEl.querySelector("[data-code]") as HTMLInputElement;
+  const sessionSelect = joinEl.querySelector(
+    "[data-sessions]",
+  ) as HTMLSelectElement;
+
   const unsubs = [
     session.on("status", (s) => {
       statusEl.textContent = `status: ${s}`;
     }),
     session.on("pairingQr", (e) => {
+      const host = qrEl.querySelector("[data-qr-host]") as HTMLElement;
       const uriNode = qrEl.querySelector("[data-uri]");
       if (!e.visible) {
         if (uriNode) uriNode.textContent = "";
+        clearQrCanvas(host);
         return;
       }
       if (uriNode) uriNode.textContent = e.payload.uri;
+      if (e.payload.uri) {
+        void renderQrCanvas(host, e.payload.uri).catch((err) => {
+          statusEl.textContent = `QR render: ${err instanceof Error ? err.message : String(err)}`;
+        });
+      }
     }),
     session.on("error", (e) => {
       statusEl.textContent = `error: ${e.code} — ${e.message}`;
     }),
   ];
 
+  async function refreshSessions(): Promise<void> {
+    try {
+      await session.prepare();
+      const list = await session.listSessions();
+      const prev = sessionSelect.value;
+      sessionSelect.innerHTML =
+        '<option value="">— aktív sessionök —</option>';
+      for (const s of list) {
+        const opt = document.createElement("option");
+        opt.value = s.code;
+        const peers = s.peerCounts;
+        opt.textContent = `${s.code} · ${s.mode} · v${peers.view}/c${peers.controller}`;
+        sessionSelect.append(opt);
+      }
+      if (prev) sessionSelect.value = prev;
+    } catch (e) {
+      statusEl.textContent = `session list: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  sessionSelect.addEventListener("change", () => {
+    if (sessionSelect.value) codeInput.value = sessionSelect.value;
+  });
+
+  joinEl
+    .querySelector("[data-act=refresh-sessions]")
+    ?.addEventListener("click", () => {
+      void refreshSessions();
+    });
+
+  void refreshSessions();
+
   joinEl.querySelector("[data-act=join]")?.addEventListener("click", () => {
     void (async () => {
-      const code = (
-        joinEl.querySelector("[data-code]") as HTMLInputElement
-      ).value.trim();
+      const code = codeInput.value.trim();
       await session.prepare();
       await session.joinWithCode(code, "view");
       qrEl.hidden = false;
       statusEl.textContent = `Kapcsolódva · peer ${session.peerId}`;
-    })();
+    })().catch((e) => {
+      statusEl.textContent = `error: ${e instanceof Error ? e.message : String(e)}`;
+    });
   });
 
   qrEl.querySelector("[data-act=show-qr]")?.addEventListener("click", () => {
@@ -93,6 +143,7 @@ export function mountView(
   qrEl.querySelector("[data-act=hide-qr]")?.addEventListener("click", () => {
     const id = session.peerId;
     if (id) session.hidePairingQr({ type: "view", viewId: id });
+    clearQrCanvas(qrEl.querySelector("[data-qr-host]") as HTMLElement);
   });
 
   qrEl.querySelector("[data-act=copy-uri]")?.addEventListener("click", () => {

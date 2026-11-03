@@ -4,7 +4,7 @@
 
 - Observer aktivál → rövid **session kód** (+ opcionális share link)
 - View / Controller: **kód** *vagy* **QR / deep link**
-- **Nincs** publikus aktív-session lista
+- **Nincs** publikus aktív-session lista produkcióban (`session.list` csak local demó / `VCC_ALLOW_SESSION_LIST`)
 
 ## QR / pair payload
 

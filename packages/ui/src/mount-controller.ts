@@ -1,5 +1,6 @@
-import type { MediaPublication, Session } from "@vcc/core";
-import { parsePairUri } from "@vcc/core";
+import type { MediaPublication, PairPayload, Session } from "@vcc/core";
+import { parsePairUri } from "./parse-pair-uri.js";
+import type { QrScanHandle } from "./qr-scan.js";
 
 export type Unmount = () => void;
 
@@ -30,18 +31,32 @@ export function mountController(
     <div style="opacity:.7" data-status>status: ${session.status}</div>
     <div class="vcc-panel">
       <div class="vcc-live">JOIN</div>
+      <select data-sessions style="font:inherit;padding:.5rem;margin-top:.5rem;width:100%;box-sizing:border-box">
+        <option value="">— aktív sessionök —</option>
+      </select>
+      <button type="button" class="vcc-btn secondary" data-act="refresh-sessions" style="margin-top:.5rem">Lista frissítés</button>
       <input data-code placeholder="SESSION KÓD" maxlength="8"
         style="text-transform:uppercase;font:inherit;padding:.6rem;margin-top:.5rem;width:100%;box-sizing:border-box;font-family:var(--font-mono)" />
       <textarea data-uri placeholder="vcc://pair?... (opcionális)" rows="3"
         style="margin-top:.5rem;width:100%;box-sizing:border-box;font-family:var(--font-mono);font-size:.75rem"></textarea>
       <button type="button" class="vcc-btn" data-act="join-code" style="margin-top:.75rem">Kóddal</button>
       <button type="button" class="vcc-btn secondary" data-act="join-uri" style="margin-top:.5rem;margin-left:.35rem">Pair URI</button>
+      <button type="button" class="vcc-btn secondary" data-act="scan-qr" style="margin-top:.5rem;margin-left:.35rem">QR scan</button>
+      <button type="button" class="vcc-btn secondary" data-act="stop-scan" hidden style="margin-top:.5rem;margin-left:.35rem">Scan stop</button>
+      <div data-scan-host style="margin-top:.5rem"></div>
     </div>
     <div data-body></div>
   `;
 
   const body = root.querySelector("[data-body]") as HTMLElement;
   const statusEl = root.querySelector("[data-status]") as HTMLElement;
+  const scanHost = root.querySelector("[data-scan-host]") as HTMLElement;
+  const codeInput = root.querySelector("[data-code]") as HTMLInputElement;
+  const uriInput = root.querySelector("[data-uri]") as HTMLTextAreaElement;
+  const sessionSelect = root.querySelector(
+    "[data-sessions]",
+  ) as HTMLSelectElement;
+  let scanHandle: QrScanHandle | null = null;
 
   if (mode === "score") {
     body.innerHTML = `
@@ -73,24 +88,54 @@ export function mountController(
     }),
   ];
 
+  async function refreshSessions(): Promise<void> {
+    try {
+      await session.prepare();
+      const list = await session.listSessions();
+      const prev = sessionSelect.value;
+      sessionSelect.innerHTML =
+        '<option value="">— aktív sessionök —</option>';
+      for (const s of list) {
+        const opt = document.createElement("option");
+        opt.value = s.code;
+        const peers = s.peerCounts;
+        opt.textContent = `${s.code} · ${s.mode} · v${peers.view}/c${peers.controller}/o${peers.observer}`;
+        sessionSelect.append(opt);
+      }
+      if (prev) sessionSelect.value = prev;
+    } catch (e) {
+      statusEl.textContent = `session list: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  sessionSelect.addEventListener("change", () => {
+    if (sessionSelect.value) codeInput.value = sessionSelect.value;
+  });
+
+  root
+    .querySelector("[data-act=refresh-sessions]")
+    ?.addEventListener("click", () => {
+      void refreshSessions();
+    });
+
+  void refreshSessions();
+
   root.querySelector("[data-act=join-code]")?.addEventListener("click", () => {
     void (async () => {
-      const code = (
-        root.querySelector("[data-code]") as HTMLInputElement
-      ).value.trim();
+      const code = codeInput.value.trim();
       await session.prepare();
       await session.joinWithCode(code, "controller");
       statusEl.textContent = `Kapcsolódva · ${session.peerId}`;
       enableActions();
-    })();
+    })().catch((e) => {
+      statusEl.textContent = `error: ${e instanceof Error ? e.message : String(e)}`;
+    });
   });
 
   root.querySelector("[data-act=join-uri]")?.addEventListener("click", () => {
     void (async () => {
-      const raw = (
-        root.querySelector("[data-uri]") as HTMLTextAreaElement
-      ).value.trim();
-      const payload = parsePairUri(raw);
+      const raw = uriInput.value.trim();
+      const payload = parsePairUri(raw) as PairPayload | null;
       if (!payload) {
         statusEl.textContent = "Érvénytelen pair URI";
         return;
@@ -99,6 +144,53 @@ export function mountController(
       await session.joinWithPairToken(payload);
       statusEl.textContent = `Kapcsolódva (pair) · ${session.peerId}`;
       enableActions();
+    })().catch((e) => {
+      statusEl.textContent = `error: ${e instanceof Error ? e.message : String(e)}`;
+    });
+  });
+
+  root.querySelector("[data-act=scan-qr]")?.addEventListener("click", () => {
+    void (async () => {
+      try {
+        await scanHandle?.stop();
+        scanHandle = await import("./qr-scan.js").then((m) =>
+          m.startQrScan(scanHost, (text) => {
+            uriInput.value = text;
+            const payload = parsePairUri(text);
+            if (payload) {
+              statusEl.textContent = "QR OK — Pair URI kitöltve";
+            } else if (/^[A-Z0-9]{4,8}$/i.test(text.trim())) {
+              codeInput.value = text.trim().toUpperCase();
+              statusEl.textContent = "QR OK — session kód kitöltve";
+            } else {
+              statusEl.textContent = "QR beolvasva (nem pair URI / kód)";
+            }
+            void scanHandle?.stop().then(() => {
+              scanHandle = null;
+              (
+                root.querySelector("[data-act=stop-scan]") as HTMLButtonElement
+              ).hidden = true;
+            });
+          }),
+        );
+        (
+          root.querySelector("[data-act=stop-scan]") as HTMLButtonElement
+        ).hidden = false;
+        statusEl.textContent = "QR scanner aktív";
+      } catch (e) {
+        statusEl.textContent = `QR scan: ${e instanceof Error ? e.message : String(e)} (HTTPS / permission?)`;
+      }
+    })();
+  });
+
+  root.querySelector("[data-act=stop-scan]")?.addEventListener("click", () => {
+    void (async () => {
+      await scanHandle?.stop();
+      scanHandle = null;
+      (
+        root.querySelector("[data-act=stop-scan]") as HTMLButtonElement
+      ).hidden = true;
+      statusEl.textContent = "Scan stopped";
     })();
   });
 
@@ -124,19 +216,26 @@ export function mountController(
 
   body.querySelector("[data-act=cam-start]")?.addEventListener("click", () => {
     void (async () => {
-      publication = await session.publishMedia({
-        kind: "camera",
-        label: "cam-1",
-      });
-      const preview = body.querySelector(
-        "[data-preview]",
-      ) as HTMLVideoElement | null;
-      if (preview && publication.stream) preview.srcObject = publication.stream;
-      (body.querySelector("[data-act=cam-stop]") as HTMLButtonElement).disabled =
-        false;
-      (body.querySelector("[data-act=cam-start]") as HTMLButtonElement).disabled =
-        true;
-      statusEl.textContent = `LIVE · ${publication.id}`;
+      try {
+        publication = await session.publishMedia({
+          kind: "camera",
+          label: "cam-1",
+        });
+        const preview = body.querySelector(
+          "[data-preview]",
+        ) as HTMLVideoElement | null;
+        if (preview && publication.stream)
+          preview.srcObject = publication.stream;
+        (
+          body.querySelector("[data-act=cam-stop]") as HTMLButtonElement
+        ).disabled = false;
+        (
+          body.querySelector("[data-act=cam-start]") as HTMLButtonElement
+        ).disabled = true;
+        statusEl.textContent = `LIVE · ${publication.id}`;
+      } catch (e) {
+        statusEl.textContent = `camera: ${e instanceof Error ? e.message : String(e)}`;
+      }
     })();
   });
 
@@ -157,6 +256,7 @@ export function mountController(
   });
 
   return () => {
+    void scanHandle?.stop();
     for (const off of unsubs) off();
     el.innerHTML = "";
   };

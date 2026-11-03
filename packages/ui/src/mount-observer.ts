@@ -1,4 +1,5 @@
 import type { ConnectionMode, Session, TopologySnapshot } from "@vcc/core";
+import { clearQrCanvas, renderQrCanvas } from "./qr.js";
 
 export type Unmount = () => void;
 
@@ -48,9 +49,10 @@ export function mountObserver(
   qrEl.className = "vcc-panel";
   qrEl.hidden = true;
   qrEl.innerHTML = `<div class="vcc-live">PAIRING QR</div>
+    <div data-qr-host></div>
     <pre data-uri style="white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);font-size:.75rem"></pre>
     <button type="button" class="vcc-btn secondary" data-act="copy-uri" style="margin-top:.5rem">URI másolása</button>
-    <p style="opacity:.65;font-size:.85rem;margin:.5rem 0 0">Illeszd a Controller „pair URI” mezőjébe (QR lib a demóban opcionális).</p>`;
+    <p style="opacity:.65;font-size:.85rem;margin:.5rem 0 0">Olvasd be Controllerrel, vagy másold a pair URI mezőbe.</p>`;
 
   const left = document.createElement("div");
   left.style.cssText = "display:grid;gap:1.25rem";
@@ -82,13 +84,20 @@ export function mountObserver(
       /* topology refresh animates peers */
     }),
     session.on("pairingQr", (e) => {
+      const host = qrEl.querySelector("[data-qr-host]") as HTMLElement;
       if (!e.visible) {
         qrEl.hidden = true;
+        clearQrCanvas(host);
         return;
       }
       qrEl.hidden = false;
       const uriNode = qrEl.querySelector("[data-uri]");
       if (uriNode) uriNode.textContent = e.payload.uri;
+      if (e.payload.uri) {
+        void renderQrCanvas(host, e.payload.uri).catch((err) => {
+          statusEl.textContent = `QR render: ${err instanceof Error ? err.message : String(err)}`;
+        });
+      }
     }),
     session.on("error", (e) => {
       statusEl.textContent = `error: ${e.code} — ${e.message}`;
@@ -162,7 +171,10 @@ export function mountObserver(
 
   codeEl.querySelector("[data-act=hide-qr]")?.addEventListener("click", () => {
     if (lastTarget) session.hidePairingQr(lastTarget);
-    else qrEl.hidden = true;
+    else {
+      qrEl.hidden = true;
+      clearQrCanvas(qrEl.querySelector("[data-qr-host]") as HTMLElement);
+    }
   });
 
   return () => {

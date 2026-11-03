@@ -13,6 +13,7 @@ $config = require __DIR__ . '/config.php';
 </head>
 <body>
   <div id="app"></div>
+  <?php require __DIR__ . '/partials/importmap.php'; ?>
   <script>
     window.__VCC_CONFIG__ = <?= json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   </script>

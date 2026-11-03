@@ -40,6 +40,8 @@ interface LocalPublication {
   track: MediaStreamTrack;
   stream: MediaStream;
   targets: string[];
+  /** Publish to all current + future linked peers. */
+  broadcast: boolean;
 }
 
 const DC_LABEL = "vcc";
@@ -68,7 +70,9 @@ export class PeerMesh {
       }
     }
     for (const id of wanted) {
-      void this.ensurePeer(id);
+      void this.ensurePeer(id).then(() => {
+        void this.attachBroadcastPubs(id);
+      });
     }
     for (const id of [...this.peers.keys()]) {
       if (!wanted.has(id)) this.teardownPeer(id);
@@ -167,13 +171,15 @@ export class PeerMesh {
   }): Promise<{ id: string; kind: string; stop: () => Promise<void> }> {
     // Use MediaStreamTrack.id so remote ontrack / trackEnded line up.
     const id = opts.track.id || `pub_${++this.pubSeq}_${Date.now()}`;
-    const targets =
-      opts.to === undefined || opts.to === "*"
-        ? [...this.peers.keys()]
-        : Array.isArray(opts.to)
-          ? opts.to
-          : [opts.to];
-    if (targets.length === 0) {
+    const broadcast = opts.to === undefined || opts.to === "*";
+    const targets = broadcast
+      ? [...this.peers.keys()]
+      : Array.isArray(opts.to)
+        ? opts.to
+        : [opts.to as string];
+
+    // Broadcast may start with zero peers (camera before any View links).
+    if (!broadcast && targets.length === 0) {
       throw new VccClientError(
         "TARGET_OUT_OF_SCOPE",
         "no linked peers for publishMedia",
@@ -186,33 +192,13 @@ export class PeerMesh {
       label: opts.label,
       track: opts.track,
       stream: opts.stream,
-      targets,
+      targets: [...targets],
+      broadcast,
     };
     this.publications.set(id, pub);
 
     for (const remoteId of targets) {
-      const entry = await this.ensurePeer(remoteId);
-      const sender = entry.pc.addTrack(opts.track, opts.stream);
-      entry.senders.set(id, sender);
-      // Meta so receiver can map track → publicationId
-      void this.sendJson(remoteId, {
-        v: 1,
-        id: `meta_${id}`,
-        name: "vcc.media.meta",
-        type: "system",
-        ts: Date.now(),
-        to: remoteId,
-        payload: {
-          publicationId: id,
-          kind: opts.kind,
-          label: opts.label,
-          trackId: opts.track.id,
-        },
-        delivery: "reliable",
-      }).catch(() => {
-        /* meta best-effort; track still flows */
-      });
-      await this.makeOffer(remoteId, entry);
+      await this.pushTrackToPeer(pub, remoteId);
     }
 
     opts.track.addEventListener("ended", () => {
@@ -224,6 +210,48 @@ export class PeerMesh {
       kind: opts.kind,
       stop: () => this.unpublish(id),
     };
+  }
+
+  private async attachBroadcastPubs(remoteId: string): Promise<void> {
+    for (const pub of this.publications.values()) {
+      if (!pub.broadcast && !pub.targets.includes(remoteId)) continue;
+      if (pub.targets.includes(remoteId)) {
+        const entry = this.peers.get(remoteId);
+        if (entry?.senders.has(pub.id)) continue;
+      } else if (pub.broadcast) {
+        pub.targets.push(remoteId);
+      }
+      await this.pushTrackToPeer(pub, remoteId);
+    }
+  }
+
+  private async pushTrackToPeer(
+    pub: LocalPublication,
+    remoteId: string,
+  ): Promise<void> {
+    const entry = await this.ensurePeer(remoteId);
+    if (entry.senders.has(pub.id)) return;
+    const sender = entry.pc.addTrack(pub.track, pub.stream);
+    entry.senders.set(pub.id, sender);
+    if (!pub.targets.includes(remoteId)) pub.targets.push(remoteId);
+    void this.sendJson(remoteId, {
+      v: 1,
+      id: `meta_${pub.id}`,
+      name: "vcc.media.meta",
+      type: "system",
+      ts: Date.now(),
+      to: remoteId,
+      payload: {
+        publicationId: pub.id,
+        kind: pub.kind,
+        label: pub.label,
+        trackId: pub.track.id,
+      },
+      delivery: "reliable",
+    }).catch(() => {
+      /* meta best-effort; track still flows */
+    });
+    await this.makeOffer(remoteId, entry);
   }
 
   async unpublish(publicationId: string): Promise<void> {
@@ -341,7 +369,8 @@ export class PeerMesh {
 
     // Attach any already-published local tracks to a newly linked peer.
     for (const pub of this.publications.values()) {
-      if (pub.targets.includes(remoteId) || pub.targets.length === 0) {
+      if (pub.broadcast || pub.targets.includes(remoteId) || pub.targets.length === 0) {
+        if (!pub.targets.includes(remoteId)) pub.targets.push(remoteId);
         const sender = pc.addTrack(pub.track, pub.stream);
         entry.senders.set(pub.id, sender);
       }
