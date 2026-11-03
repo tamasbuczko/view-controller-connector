@@ -50,8 +50,10 @@ return [
         ['name' => 'match.competitors', 'type' => 'state', 'delivery' => 'reliable'],
         ['name' => 'camera.live', 'type' => 'event', 'delivery' => 'reliable'],
     ],
+    // Multi-cam tatami: several phones may publish camera at once.
+    // media-exclusive would allow only one — use last-write-wins for venue tests.
     'featureConflict' => [
-        'camera.live' => 'media-exclusive',
+        'camera.live' => 'last-write-wins',
         'score.updated' => 'last-write-wins',
     ],
 ];

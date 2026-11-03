@@ -65,6 +65,7 @@ export function mountController(
         <button type="button" data-side="ao" style="background:#1d4f91;color:#fff;border:0;padding:1.5rem;font-size:1.15rem;border-radius:2px">AO +1</button>
       </div>
       <div data-score style="font-family:var(--font-display);font-size:2rem;margin-top:.75rem">0 — 0</div>
+      <button type="button" class="vcc-btn secondary" data-act="next-match" style="margin-top:.75rem;width:100%" disabled>Következő meccs (0–0)</button>
     `;
   } else {
     body.innerHTML = `
@@ -196,30 +197,42 @@ export function mountController(
 
   function enableActions(): void {
     body
-      .querySelectorAll("[data-act=cam-start], [data-side]")
+      .querySelectorAll("[data-act=cam-start], [data-side], [data-act=next-match]")
       .forEach((n) => ((n as HTMLButtonElement).disabled = false));
+  }
+
+  function pushScore(): void {
+    const score = body.querySelector("[data-score]");
+    if (score) score.textContent = `${state.aka} — ${state.ao}`;
+    void session.send({
+      name: "score.updated",
+      to: "*",
+      payload: { ...state },
+    });
   }
 
   body.querySelectorAll("[data-side]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const side = btn.getAttribute("data-side") as "aka" | "ao";
       state[side] += 1;
-      const score = body.querySelector("[data-score]");
-      if (score) score.textContent = `${state.aka} — ${state.ao}`;
-      void session.send({
-        name: "score.updated",
-        to: "*",
-        payload: { ...state },
-      });
+      pushScore();
     });
+  });
+
+  body.querySelector("[data-act=next-match]")?.addEventListener("click", () => {
+    state.aka = 0;
+    state.ao = 0;
+    pushScore();
+    statusEl.textContent = "Következő meccs — 0–0";
   });
 
   body.querySelector("[data-act=cam-start]")?.addEventListener("click", () => {
     void (async () => {
       try {
+        const label = `cam-${session.peerId ?? crypto.randomUUID().slice(0, 8)}`;
         publication = await session.publishMedia({
           kind: "camera",
-          label: "cam-1",
+          label,
         });
         const preview = body.querySelector(
           "[data-preview]",
