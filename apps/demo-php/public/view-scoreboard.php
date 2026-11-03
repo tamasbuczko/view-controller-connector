@@ -13,22 +13,69 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
   <link rel="stylesheet" href="/assets/ui/theme.css" />
   <style>
     body { margin: 0; }
-    .board { text-align: center; padding: .5rem 0 1rem; }
-    .cat { font-family: var(--font-mono); font-size: .85rem; opacity: .7; letter-spacing: .06em; text-transform: uppercase; }
+    .board {
+      text-align: center;
+      padding: clamp(1rem, 4vh, 2.5rem) 1rem 2rem;
+      min-height: 70vh;
+      display: grid;
+      align-content: center;
+      gap: 0.35rem;
+    }
+    .board .vcc-live {
+      letter-spacing: 0.16em;
+      margin-bottom: 0.5rem;
+    }
+    .cat {
+      font-family: var(--font-mono);
+      font-size: clamp(0.75rem, 1.6vw, 1rem);
+      opacity: 0.65;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
     .names {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
-      gap: .75rem;
+      gap: clamp(0.5rem, 2vw, 1.25rem);
       align-items: end;
-      margin: .75rem 0 .25rem;
+      margin: 0.85rem 0 0.15rem;
       font-family: var(--font-display);
-      font-size: clamp(1.25rem, 4vw, 2.25rem);
+      font-weight: 700;
+      font-size: clamp(1.35rem, 4.5vw, 2.75rem);
+      letter-spacing: -0.03em;
     }
     .aka { color: #c43c22; text-align: right; }
     .ao { color: #1d4f91; text-align: left; }
-    .vs { opacity: .45; font-size: .8em; }
-    .score { font-family: var(--font-display); font-size: clamp(4rem, 20vw, 8rem); letter-spacing: -0.04em; }
-    .clubs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; opacity: .65; font-size: .9rem; }
+    .vs { opacity: 0.35; font-size: 0.7em; padding-bottom: 0.15em; }
+    .score {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: clamp(4.5rem, 22vw, 9rem);
+      letter-spacing: -0.05em;
+      line-height: 0.95;
+      margin-top: 0.35rem;
+    }
+    .clubs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      opacity: 0.55;
+      font-size: clamp(0.8rem, 1.5vw, 1rem);
+      margin-top: 0.25rem;
+    }
+    .pulse-line {
+      height: 3px;
+      width: min(14rem, 40vw);
+      margin: 1rem auto 0;
+      background: var(--vcc-signal);
+      transform-origin: center;
+      animation: board-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes board-pulse {
+      50% { opacity: 0.35; transform: scaleX(0.85); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pulse-line { animation: none; }
+    }
   </style>
 </head>
 <body>
@@ -56,13 +103,15 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
         <div id="aka-club" style="text-align:right"></div>
         <div id="ao-club" style="text-align:left"></div>
       </div>
-      <div class="score" id="score">0 — 0</div>`;
+      <div class="score" id="score">0 — 0</div>
+      <div class="pulse-line" aria-hidden="true"></div>`;
 
     const session = createSession(window.__VCC_CONFIG__);
     mountView(document.getElementById("app"), session, {
       title: "Scoreboard View",
       contentEl: content,
       autoJoinCode: window.__VCC_AUTO_CODE__ || undefined,
+      kiosk: Boolean(window.__VCC_AUTO_CODE__),
     });
 
     function applyCompetitors(p) {

@@ -144,3 +144,29 @@
     grid-column: 1 / -1;
   }
 }
+
+[data-theme="vcc-demo"] .vcc-view--kiosk .vcc-view-content {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+}
+
+[data-theme="vcc-demo"] .vcc-kiosk-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.55rem 0.85rem;
+  background: color-mix(in oklab, var(--vcc-mat-deep) 92%, black);
+  color: var(--vcc-paper);
+  z-index: 40;
+}
+
+[data-theme="vcc-demo"] .vcc-kiosk-bar .vcc-btn.secondary {
+  border-color: color-mix(in oklab, var(--vcc-paper) 35%, transparent);
+  color: var(--vcc-paper);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}

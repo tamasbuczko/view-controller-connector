@@ -7,7 +7,7 @@ $config = require dirname(__DIR__) . '/config.php';
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tatami desk</title>
+  <title>Tatami desk — VCC</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;600&family=Syne:wght@700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/ui/theme.css" />
   <link rel="stylesheet" href="/comp/comp.css" />
@@ -15,36 +15,46 @@ $config = require dirname(__DIR__) . '/config.php';
 <body class="comp" data-theme="vcc-demo">
   <div class="comp-wrap">
     <nav class="comp-nav">
-      <a href="/comp/">← Tatamik</a>
+      <a href="/comp/">Tatamik</a>
+      <a href="/" >VCC</a>
     </nav>
-    <h1 class="comp-brand" id="title">Tatami</h1>
-    <p class="comp-sub" id="subtitle">Operátor desk</p>
+
+    <header class="comp-hero">
+      <p class="comp-eyebrow" id="eyebrow">Operátor desk</p>
+      <h1 class="comp-brand" id="title" style="font-size:clamp(2.2rem,7vw,3.75rem)">Tatami</h1>
+      <p class="comp-sub" id="subtitle">Session · eszközök · küzdelem-sor</p>
+      <div class="comp-live-line" id="live-line"></div>
+    </header>
 
     <div class="comp-desk">
-      <section class="comp-panel">
-        <h3>Küzdelmek</h3>
-        <div id="bouts"></div>
+      <section class="comp-pane">
+        <p class="comp-pane-label">Küzdelmek</p>
+        <div class="comp-bout-list" id="bouts"></div>
         <div class="comp-actions">
-          <button type="button" id="btn-start">Következő indítása</button>
-          <button type="button" class="secondary" id="btn-complete">Meccs lezárása</button>
-          <button type="button" class="secondary" id="btn-next">Következő meccs</button>
-          <button type="button" class="secondary" id="btn-refresh">Frissítés</button>
+          <button type="button" class="comp-btn" id="btn-start">Következő indítása</button>
+          <button type="button" class="comp-btn secondary" id="btn-complete">Lezárás</button>
+          <button type="button" class="comp-btn secondary" id="btn-next">Következő meccs</button>
+          <button type="button" class="comp-btn secondary" id="btn-refresh">Frissítés</button>
         </div>
       </section>
 
-      <section class="comp-panel">
-        <h3>VCC session + eszközök</h3>
-        <div class="comp-status" id="vcc-status">Observer: idle</div>
-        <div class="comp-code" id="session-code">————</div>
-        <div class="comp-actions">
-          <button type="button" id="btn-session">Session indítás (n-n)</button>
-          <button type="button" class="secondary" id="btn-copy">Kód másolása</button>
+      <aside class="comp-pane">
+        <p class="comp-pane-label">Session</p>
+        <div class="comp-code-block">
+          <div class="comp-status" id="vcc-status">Observer: idle</div>
+          <div class="comp-code" id="session-code">————</div>
         </div>
-        <div class="comp-links" id="device-links"></div>
-        <p class="comp-status" style="margin-top:1rem">
-          Checklist: scoreboard TV · score telefon · 2–4 cam telefon (QR a video-refen) · REC a video-refen
+        <div class="comp-actions">
+          <button type="button" class="comp-btn" id="btn-session">Session indítás</button>
+          <button type="button" class="comp-btn secondary" id="btn-copy">Másolás</button>
+        </div>
+        <p class="comp-pane-label" style="margin-top:1.75rem">Eszközök</p>
+        <div class="comp-device-links" id="device-links"></div>
+        <p class="comp-hint">
+          TV: scoreboard · Laptop 2. ablak: video-ref · Telefon: score · Kamerák: QR a video-refen.
+          Minden eszköz ugyanazon a Wi‑Fin / hotspoton.
         </p>
-      </section>
+      </aside>
     </div>
     <p class="comp-status" id="status"></p>
   </div>
@@ -63,13 +73,15 @@ $config = require dirname(__DIR__) . '/config.php';
     const codeEl = document.getElementById("session-code");
     const vccStatus = document.getElementById("vcc-status");
     const linksEl = document.getElementById("device-links");
+    const liveLine = document.getElementById("live-line");
 
     let state = null;
     let sessionCode = null;
     const observer = createSession(window.__VCC_CONFIG__);
 
     observer.on("status", (s) => {
-      vccStatus.textContent = `Observer: ${s}${observer.peerId ? ` · ${observer.peerId}` : ""}`;
+      vccStatus.textContent = `Observer · ${s}${observer.peerId ? ` · ${observer.peerId}` : ""}`;
+      if (s === "active") liveLine.classList.add("is-on");
     });
     observer.on("error", (e) => {
       vccStatus.textContent = `error: ${e.code} — ${e.message}`;
@@ -92,19 +104,19 @@ $config = require dirname(__DIR__) . '/config.php';
 
     function renderLinks() {
       if (!sessionCode) {
-        linksEl.innerHTML = "<div class='comp-meta'>Indíts sessiont a deep linkekhez.</div>";
+        linksEl.innerHTML = `<div class="comp-status">Indíts sessiont a linkekhez.</div>`;
         return;
       }
       const items = [
-        ["Scoreboard (TV)", "/view-scoreboard.php"],
-        ["Video ref (laptop)", "/view-video.php"],
-        ["Score controller", "/controller-score.php"],
-        ["Camera controller", "/controller-camera.php"],
+        ["Scoreboard", "/view-scoreboard.php", "TV"],
+        ["Video ref", "/view-video.php", "Laptop"],
+        ["Score", "/controller-score.php", "Telefon"],
+        ["Camera", "/controller-camera.php", "Telefon"],
       ];
       linksEl.innerHTML = items
         .map(
-          ([label, path]) =>
-            `<a href="${roleUrl(path)}" target="_blank" rel="noopener">${escapeHtml(label)} → ${escapeHtml(roleUrl(path))}</a>`,
+          ([label, path, where]) =>
+            `<a href="${roleUrl(path)}" target="_blank" rel="noopener"><span>${escapeHtml(label)}</span><span>${escapeHtml(where)} →</span></a>`,
         )
         .join("");
     }
@@ -113,15 +125,15 @@ $config = require dirname(__DIR__) . '/config.php';
       if (!state) return;
       document.getElementById("title").textContent = state.tatami.name;
       document.getElementById("subtitle").textContent =
-        `${state.event?.name ?? ""} · ${state.categories?.length ?? 0} kategória`;
+        `${state.event?.name ?? ""} · ${state.categories?.length ?? 0} kategória · ${state.bouts?.length ?? 0} küzdelem`;
+      document.getElementById("eyebrow").textContent = state.event?.id ?? "desk";
       boutsEl.innerHTML = "";
       let lastCat = "";
       for (const b of state.bouts) {
         if (b._categoryName !== lastCat) {
           lastCat = b._categoryName;
           const h = document.createElement("div");
-          h.className = "comp-meta";
-          h.style.marginTop = "0.75rem";
+          h.className = "comp-cat";
           h.textContent = lastCat;
           boutsEl.append(h);
         }
@@ -129,19 +141,19 @@ $config = require dirname(__DIR__) . '/config.php';
         row.className = "comp-bout";
         row.dataset.status = b.status;
         const score =
-          b.score != null
-            ? `${b.score.aka ?? 0}–${b.score.ao ?? 0}`
-            : "—";
-        row.innerHTML = `<div class="comp-row">
+          b.score != null ? `${b.score.aka ?? 0}–${b.score.ao ?? 0}` : "—";
+        row.innerHTML = `<div class="comp-bout-top">
             <div class="comp-names">
               <span class="comp-aka">${escapeHtml(b.aka?.name ?? "AKA")}</span>
-              vs
+              <span style="opacity:.35;font-weight:400"> · </span>
               <span class="comp-ao">${escapeHtml(b.ao?.name ?? "AO")}</span>
             </div>
             <span class="comp-badge">${escapeHtml(b.status)}</span>
           </div>
-          <div class="comp-meta">#${b.order} · ${score}
-            <button type="button" data-start="${escapeHtml(b.id)}" class="secondary" style="margin-left:.5rem;padding:.2rem .45rem;font-size:.75rem">Start</button>
+          <div class="comp-bout-meta">
+            <span>#${b.order}</span>
+            <span>${score}</span>
+            <button type="button" data-start="${escapeHtml(b.id)}">Start</button>
           </div>`;
         boutsEl.append(row);
       }
@@ -200,15 +212,9 @@ $config = require dirname(__DIR__) . '/config.php';
         return data;
       }
       await load();
-      // Push competitors over VCC if observer is active and mesh peers exist —
-      // scoreboard also polls host; still try send via a side-channel note in status.
       if (data.competitors) {
-        statusEl.textContent = `Élő: ${data.competitors.aka?.name} vs ${data.competitors.ao?.name}`;
-        try {
-          // Observer has no PeerMesh — scoreboard polls /comp/api. Optional: broadcast nothing.
-        } catch {
-          /* ignore */
-        }
+        statusEl.textContent = `Élő · ${data.competitors.aka?.name} vs ${data.competitors.ao?.name}`;
+        liveLine.classList.add("is-on");
       } else if (data.message) {
         statusEl.textContent = data.message;
       } else {
@@ -219,14 +225,15 @@ $config = require dirname(__DIR__) . '/config.php';
 
     document.getElementById("btn-session").onclick = async () => {
       try {
-        vccStatus.textContent = "Observer: connecting…";
+        vccStatus.textContent = "Observer · connecting…";
         await observer.prepare();
         const created = await observer.createAndActivate({ mode: "n-n" });
         sessionCode = created.sessionCode;
         codeEl.textContent = sessionCode;
         await persistSession(created.sessionCode, created.sessionId);
         renderLinks();
-        statusEl.textContent = `Session ${sessionCode} aktív`;
+        liveLine.classList.add("is-on");
+        statusEl.textContent = `Session ${sessionCode}`;
       } catch (e) {
         statusEl.textContent = e instanceof Error ? e.message : String(e);
       }
@@ -251,7 +258,6 @@ $config = require dirname(__DIR__) . '/config.php';
       });
     }
 
-    // Light poll so score updates from phones show on desk queue
     setInterval(() => {
       void load().catch(() => {});
     }, 4000);

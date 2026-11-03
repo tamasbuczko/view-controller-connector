@@ -89,7 +89,8 @@ function fail(
 
 function originOk(origin: string | undefined): boolean {
   if (ALLOWED_ORIGINS.length === 0) return true; // local demó
-  if (!origin) return false;
+  // Native WS clients (tests, local tools) often omit Origin — allow only on loopback bind.
+  if (!origin) return isLocalHost;
   return ALLOWED_ORIGINS.includes(origin);
 }
 

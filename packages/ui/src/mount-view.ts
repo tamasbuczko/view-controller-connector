@@ -9,6 +9,11 @@ export interface ViewUiOpts {
   contentEl?: HTMLElement;
   /** If set, join as View after mount (competition deep link). */
   autoJoinCode?: string;
+  /**
+   * Full-bleed venue display: after join, hide join/header chrome.
+   * QR stays available via a slim edge control on video-ref.
+   */
+  kiosk?: boolean;
 }
 
 export function mountView(
@@ -19,17 +24,21 @@ export function mountView(
   el.innerHTML = "";
   el.dataset.theme = "vcc-demo";
 
+  const kiosk = Boolean(opts?.kiosk);
   const root = document.createElement("div");
-  root.className = "vcc-view";
-  root.style.cssText =
-    "display:grid;gap:1.25rem;padding:1.5rem;max-width:720px;margin:0 auto;";
+  root.className = kiosk ? "vcc-view vcc-view--kiosk" : "vcc-view";
+  root.style.cssText = kiosk
+    ? "display:grid;gap:0;padding:0;max-width:none;margin:0;min-height:100vh;"
+    : "display:grid;gap:1.25rem;padding:1.5rem;max-width:720px;margin:0 auto;";
 
   const header = document.createElement("header");
+  header.dataset.chrome = "1";
   header.innerHTML = `<div class="vcc-brand" style="font-size:2rem">VCC</div>
     <div style="opacity:.75">${opts?.title ?? "View"}</div>`;
 
   const joinEl = document.createElement("div");
   joinEl.className = "vcc-panel";
+  joinEl.dataset.chrome = "1";
   joinEl.innerHTML = `<div class="vcc-live">JOIN</div>
     <select data-sessions style="font:inherit;padding:.5rem;margin-top:.5rem;width:100%;max-width:280px;box-sizing:border-box">
       <option value="">— aktív sessionök —</option>
@@ -42,6 +51,7 @@ export function mountView(
   const qrEl = document.createElement("div");
   qrEl.className = "vcc-panel";
   qrEl.hidden = true;
+  qrEl.dataset.chrome = "qr";
   qrEl.innerHTML = `<div class="vcc-live">PAIRING QR (ez a View)</div>
     <button type="button" class="vcc-btn" data-act="show-qr" style="margin-top:.5rem">QR mutat</button>
     <button type="button" class="vcc-btn secondary" data-act="hide-qr" style="margin-top:.5rem;margin-left:.5rem">QR elrejt</button>
@@ -50,6 +60,7 @@ export function mountView(
     <pre data-uri style="white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);font-size:.75rem;margin-top:.75rem"></pre>`;
 
   const statusEl = document.createElement("div");
+  statusEl.dataset.chrome = "1";
   statusEl.style.opacity = "0.7";
   statusEl.textContent = `status: ${session.status}`;
 
@@ -57,8 +68,25 @@ export function mountView(
   contentHost.className = "vcc-view-content";
   if (opts?.contentEl) contentHost.append(opts.contentEl);
 
-  root.append(header, statusEl, joinEl, qrEl, contentHost);
+  const kioskBar = document.createElement("div");
+  kioskBar.className = "vcc-kiosk-bar";
+  kioskBar.hidden = true;
+  kioskBar.innerHTML = `<button type="button" class="vcc-btn secondary" data-act="kiosk-qr">QR</button>
+    <button type="button" class="vcc-btn secondary" data-act="kiosk-chrome">Beállítások</button>
+    <span data-kiosk-status style="font-family:var(--font-mono);font-size:.75rem;opacity:.7"></span>`;
+
+  root.append(header, statusEl, joinEl, qrEl, contentHost, kioskBar);
   el.append(root);
+
+  function applyKioskChrome(connected: boolean): void {
+    if (!kiosk) return;
+    const hide = connected;
+    root.querySelectorAll("[data-chrome='1']").forEach((n) => {
+      (n as HTMLElement).hidden = hide;
+    });
+    kioskBar.hidden = !hide;
+    contentHost.style.padding = hide ? "1rem 1.25rem 3.5rem" : "";
+  }
 
   const codeInput = joinEl.querySelector("[data-code]") as HTMLInputElement;
   const sessionSelect = joinEl.querySelector(
@@ -127,8 +155,11 @@ export function mountView(
     codeInput.value = trimmed;
     await session.prepare();
     await session.joinWithCode(trimmed, "view");
-    qrEl.hidden = false;
+    qrEl.hidden = kiosk;
     statusEl.textContent = `Kapcsolódva · peer ${session.peerId}`;
+    const ks = kioskBar.querySelector("[data-kiosk-status]");
+    if (ks) ks.textContent = session.peerId ?? "";
+    applyKioskChrome(true);
   }
 
   joinEl.querySelector("[data-act=join]")?.addEventListener("click", () => {
@@ -162,6 +193,23 @@ export function mountView(
     const uri = qrEl.querySelector("[data-uri]")?.textContent ?? "";
     if (uri) void navigator.clipboard.writeText(uri);
   });
+
+  kioskBar.querySelector("[data-act=kiosk-qr]")?.addEventListener("click", () => {
+    const id = session.peerId;
+    if (!id) return;
+    qrEl.hidden = !qrEl.hidden;
+    if (!qrEl.hidden) {
+      session.showPairingQr({ type: "view", viewId: id });
+    }
+  });
+
+  kioskBar
+    .querySelector("[data-act=kiosk-chrome]")
+    ?.addEventListener("click", () => {
+      applyKioskChrome(false);
+      qrEl.hidden = false;
+      kioskBar.hidden = true;
+    });
 
   return () => {
     for (const off of unsubs) off();

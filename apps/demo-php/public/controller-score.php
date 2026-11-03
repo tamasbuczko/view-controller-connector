@@ -29,6 +29,7 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
       mode: "score",
       autoJoinCode: window.__VCC_AUTO_CODE__ || undefined,
       tatamiId: window.__VCC_TATAMI__ || undefined,
+      compact: Boolean(window.__VCC_AUTO_CODE__),
     });
   </script>
 </body>

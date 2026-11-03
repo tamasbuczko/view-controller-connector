@@ -93,6 +93,7 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
       title: "Video Ref View",
       contentEl: content,
       autoJoinCode: window.__VCC_AUTO_CODE__ || undefined,
+      kiosk: Boolean(window.__VCC_AUTO_CODE__),
     });
 
     const layout = content.querySelector("#layout");

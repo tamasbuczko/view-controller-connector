@@ -15,6 +15,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm --filter @vcc/core test && pnpm --filter @vcc/signaling test && pnpm --filter @vcc/signaling test:s3",
     "test:s3": "pnpm --filter @vcc/signaling test:s3",
+    "test:comp": "node ./scripts/test-comp-api.mjs",
     "clean": "pnpm -r exec rimraf dist"
   },
   "devDependencies": {

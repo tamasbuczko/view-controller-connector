@@ -29,6 +29,7 @@ $tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
       mode: "camera",
       title: "Camera Controller",
       autoJoinCode: window.__VCC_AUTO_CODE__ || undefined,
+      compact: Boolean(window.__VCC_AUTO_CODE__),
     });
   </script>
 </body>

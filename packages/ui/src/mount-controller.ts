@@ -11,6 +11,8 @@ export interface ControllerUiOpts {
   autoJoinCode?: string;
   /** Competition host tatami id — next-match advances fixture queue. */
   tatamiId?: string;
+  /** After join, collapse join panel for cleaner phone UX. */
+  compact?: boolean;
 }
 
 export function mountController(
@@ -133,6 +135,10 @@ export function mountController(
     await session.joinWithCode(trimmed, "controller");
     statusEl.textContent = `Kapcsolódva · ${session.peerId}`;
     enableActions();
+    if (opts?.compact || opts?.autoJoinCode) {
+      const joinPanel = root.querySelector(".vcc-panel") as HTMLElement | null;
+      if (joinPanel) joinPanel.hidden = true;
+    }
   }
 
   root.querySelector("[data-act=join-code]")?.addEventListener("click", () => {
