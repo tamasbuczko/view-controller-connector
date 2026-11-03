@@ -7,6 +7,8 @@ export interface ViewUiOpts {
   title?: string;
   /** Extra DOM for host content (e.g. scoreboard). */
   contentEl?: HTMLElement;
+  /** If set, join as View after mount (competition deep link). */
+  autoJoinCode?: string;
 }
 
 export function mountView(
@@ -119,17 +121,27 @@ export function mountView(
 
   void refreshSessions();
 
+  async function joinView(code: string): Promise<void> {
+    const trimmed = code.trim();
+    if (!trimmed) throw new Error("üres session kód");
+    codeInput.value = trimmed;
+    await session.prepare();
+    await session.joinWithCode(trimmed, "view");
+    qrEl.hidden = false;
+    statusEl.textContent = `Kapcsolódva · peer ${session.peerId}`;
+  }
+
   joinEl.querySelector("[data-act=join]")?.addEventListener("click", () => {
-    void (async () => {
-      const code = codeInput.value.trim();
-      await session.prepare();
-      await session.joinWithCode(code, "view");
-      qrEl.hidden = false;
-      statusEl.textContent = `Kapcsolódva · peer ${session.peerId}`;
-    })().catch((e) => {
+    void joinView(codeInput.value).catch((e) => {
       statusEl.textContent = `error: ${e instanceof Error ? e.message : String(e)}`;
     });
   });
+
+  if (opts?.autoJoinCode) {
+    void joinView(opts.autoJoinCode).catch((e) => {
+      statusEl.textContent = `auto-join: ${e instanceof Error ? e.message : String(e)}`;
+    });
+  }
 
   qrEl.querySelector("[data-act=show-qr]")?.addEventListener("click", () => {
     const id = session.peerId;

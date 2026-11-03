@@ -1,0 +1,128 @@
+{
+  "event": {
+    "id": "demo-2026",
+    "name": "VCC Tesztverseny"
+  },
+  "tatamis": [
+    { "id": "t1", "name": "Tatami 1" },
+    { "id": "t2", "name": "Tatami 2" },
+    { "id": "t3", "name": "Tatami 3" }
+  ],
+  "categories": [
+    { "id": "c1", "tatamiId": "t1", "name": "Kadett fiú -55 kg" },
+    { "id": "c2", "tatamiId": "t1", "name": "Junior női -53 kg" },
+    { "id": "c3", "tatamiId": "t2", "name": "Senior férfi -75 kg" },
+    { "id": "c4", "tatamiId": "t2", "name": "Senior női -61 kg" },
+    { "id": "c5", "tatamiId": "t3", "name": "U21 férfi -68 kg" }
+  ],
+  "bouts": [
+    {
+      "id": "b1",
+      "categoryId": "c1",
+      "order": 1,
+      "aka": { "name": "Nagy Ádám", "club": "Budapest KK" },
+      "ao": { "name": "Kiss Bence", "club": "Debrecen SE" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b2",
+      "categoryId": "c1",
+      "order": 2,
+      "aka": { "name": "Tóth Dániel", "club": "Győr Dojo" },
+      "ao": { "name": "Szabó Erik", "club": "Pécs KK" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b3",
+      "categoryId": "c1",
+      "order": 3,
+      "aka": { "name": "Varga Gábor", "club": "Szeged KK" },
+      "ao": { "name": "Horváth István", "club": "Miskolc SE" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b4",
+      "categoryId": "c2",
+      "order": 1,
+      "aka": { "name": "Kovács Anna", "club": "Budapest KK" },
+      "ao": { "name": "Farkas Bella", "club": "Győr Dojo" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b5",
+      "categoryId": "c2",
+      "order": 2,
+      "aka": { "name": "Molnár Csilla", "club": "Debrecen SE" },
+      "ao": { "name": "Balogh Dóra", "club": "Pécs KK" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b6",
+      "categoryId": "c3",
+      "order": 1,
+      "aka": { "name": "Pintér Attila", "club": "Szeged KK" },
+      "ao": { "name": "Juhász Zoltán", "club": "Miskolc SE" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b7",
+      "categoryId": "c3",
+      "order": 2,
+      "aka": { "name": "Lakatos Márk", "club": "Budapest KK" },
+      "ao": { "name": "Oláh Péter", "club": "Győr Dojo" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b8",
+      "categoryId": "c3",
+      "order": 3,
+      "aka": { "name": "Simon Róbert", "club": "Debrecen SE" },
+      "ao": { "name": "Fekete Tamás", "club": "Pécs KK" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b9",
+      "categoryId": "c4",
+      "order": 1,
+      "aka": { "name": "Németh Eszter", "club": "Budapest KK" },
+      "ao": { "name": "Takács Hanna", "club": "Szeged KK" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b10",
+      "categoryId": "c4",
+      "order": 2,
+      "aka": { "name": "Vincze Júlia", "club": "Győr Dojo" },
+      "ao": { "name": "Gál Katalin", "club": "Miskolc SE" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b11",
+      "categoryId": "c5",
+      "order": 1,
+      "aka": { "name": "Orsós Levente", "club": "Pécs KK" },
+      "ao": { "name": "Mészáros Noel", "club": "Debrecen SE" },
+      "status": "waiting",
+      "score": null
+    },
+    {
+      "id": "b12",
+      "categoryId": "c5",
+      "order": 2,
+      "aka": { "name": "Bogdán Ákos", "club": "Budapest KK" },
+      "ao": { "name": "Rácz Dominik", "club": "Győr Dojo" },
+      "status": "waiting",
+      "score": null
+    }
+  ]
+}

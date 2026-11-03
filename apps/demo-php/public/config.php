@@ -48,6 +48,7 @@ return [
     'catalog' => [
         ['name' => 'score.updated', 'type' => 'state', 'delivery' => 'reliable'],
         ['name' => 'match.competitors', 'type' => 'state', 'delivery' => 'reliable'],
+        ['name' => 'bout.state', 'type' => 'state', 'delivery' => 'reliable'],
         ['name' => 'camera.live', 'type' => 'event', 'delivery' => 'reliable'],
     ],
     // Multi-cam tatami: several phones may publish camera at once.
@@ -55,5 +56,7 @@ return [
     'featureConflict' => [
         'camera.live' => 'last-write-wins',
         'score.updated' => 'last-write-wins',
+        'match.competitors' => 'last-write-wins',
+        'bout.state' => 'last-write-wins',
     ],
 ];

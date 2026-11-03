@@ -7,6 +7,10 @@ export type Unmount = () => void;
 export interface ControllerUiOpts {
   title?: string;
   mode?: "score" | "camera";
+  /** If set, join as Controller after mount (competition deep link). */
+  autoJoinCode?: string;
+  /** Competition host tatami id — next-match advances fixture queue. */
+  tatamiId?: string;
 }
 
 export function mountController(
@@ -121,17 +125,27 @@ export function mountController(
 
   void refreshSessions();
 
+  async function joinController(code: string): Promise<void> {
+    const trimmed = code.trim();
+    if (!trimmed) throw new Error("üres session kód");
+    codeInput.value = trimmed;
+    await session.prepare();
+    await session.joinWithCode(trimmed, "controller");
+    statusEl.textContent = `Kapcsolódva · ${session.peerId}`;
+    enableActions();
+  }
+
   root.querySelector("[data-act=join-code]")?.addEventListener("click", () => {
-    void (async () => {
-      const code = codeInput.value.trim();
-      await session.prepare();
-      await session.joinWithCode(code, "controller");
-      statusEl.textContent = `Kapcsolódva · ${session.peerId}`;
-      enableActions();
-    })().catch((e) => {
+    void joinController(codeInput.value).catch((e) => {
       statusEl.textContent = `error: ${e instanceof Error ? e.message : String(e)}`;
     });
   });
+
+  if (opts?.autoJoinCode) {
+    void joinController(opts.autoJoinCode).catch((e) => {
+      statusEl.textContent = `auto-join: ${e instanceof Error ? e.message : String(e)}`;
+    });
+  }
 
   root.querySelector("[data-act=join-uri]")?.addEventListener("click", () => {
     void (async () => {
@@ -209,6 +223,20 @@ export function mountController(
       to: "*",
       payload: { ...state },
     });
+    if (opts?.tatamiId) {
+      void fetch("/comp/api/bout-action.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "score",
+          tatamiId: opts.tatamiId,
+          aka: state.aka,
+          ao: state.ao,
+        }),
+      }).catch(() => {
+        /* host sync best-effort */
+      });
+    }
   }
 
   body.querySelectorAll("[data-side]").forEach((btn) => {
@@ -220,10 +248,58 @@ export function mountController(
   });
 
   body.querySelector("[data-act=next-match]")?.addEventListener("click", () => {
-    state.aka = 0;
-    state.ao = 0;
-    pushScore();
-    statusEl.textContent = "Következő meccs — 0–0";
+    void (async () => {
+      const prevAka = state.aka;
+      const prevAo = state.ao;
+      if (opts?.tatamiId) {
+        try {
+          const res = await fetch("/comp/api/bout-action.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "next",
+              tatamiId: opts.tatamiId,
+              aka: prevAka,
+              ao: prevAo,
+            }),
+          });
+          const data = (await res.json()) as {
+            error?: string;
+            done?: boolean;
+            competitors?: {
+              aka?: { name?: string };
+              ao?: { name?: string };
+            };
+            message?: string;
+          };
+          if (!res.ok) {
+            statusEl.textContent = data.error || "next failed";
+            return;
+          }
+          state.aka = 0;
+          state.ao = 0;
+          pushScore();
+          if (data.competitors) {
+            void session.send({
+              name: "match.competitors",
+              to: "*",
+              payload: data.competitors,
+            });
+            statusEl.textContent = `Következő: ${data.competitors.aka?.name ?? "AKA"} vs ${data.competitors.ao?.name ?? "AO"}`;
+          } else {
+            statusEl.textContent = data.message || "Nincs több meccs";
+          }
+          return;
+        } catch (e) {
+          statusEl.textContent = `host next: ${e instanceof Error ? e.message : String(e)}`;
+          return;
+        }
+      }
+      state.aka = 0;
+      state.ao = 0;
+      pushScore();
+      statusEl.textContent = "Következő meccs — 0–0";
+    })();
   });
 
   body.querySelector("[data-act=cam-start]")?.addEventListener("click", () => {

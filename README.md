@@ -83,7 +83,8 @@ Másold `.env.example` → `.env` (gitignore). Produkcióban állítsd:
 ## Dokumentáció
 
 → [docs/README.md](docs/README.md)  
-→ [docs/competition-week1.md](docs/competition-week1.md) — élő versenyteszt szereposztás  
+→ [docs/competition-week1.md](docs/competition-week1.md) — verseny demó `/comp/` + hálózat  
+→ [docs/competition-source.md](docs/competition-source.md) — fixture / kiai adapter  
 → [docs/api-surface.md](docs/api-surface.md)  
 → [docs/security.md](docs/security.md)  
 → [docs/mvp.md](docs/mvp.md)

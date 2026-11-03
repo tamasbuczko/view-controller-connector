@@ -48,9 +48,10 @@ declare(strict_types=1);
     <p>View · Controller · Connect</p>
     <p>Három szerep. Egy kapcsolat.</p>
     <div class="cta">
-      <a href="/observer.php">Observer</a>
-      <a href="/view-scoreboard.php">View — Scoreboard</a>
-      <a href="/view-video.php">View — Video</a>
+      <a href="/comp/">Verseny demó</a>
+      <a href="/observer.php" class="secondary">Observer</a>
+      <a href="/view-scoreboard.php" class="secondary">View — Scoreboard</a>
+      <a href="/view-video.php" class="secondary">View — Video</a>
       <a href="/controller-score.php" class="secondary">Controller — Score</a>
       <a href="/controller-camera.php" class="secondary">Controller — Camera</a>
     </div>

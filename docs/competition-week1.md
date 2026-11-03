@@ -1,59 +1,63 @@
-# Élő versenyteszt — 1. hét (technológia)
+# Élő versenyteszt — technológia + demó host
 
-kiai.hu összekötés: **később**. Most: helyszíni VCC demó stack.
+kiai.hu összekötés: **később** ([competition-source.md](competition-source.md)). Most: fixture + VCC.
 
-## Szereposztás (fontos)
+## Alkalmazás-flow
 
-| Eszköz | VCC szerep | URL (LAN HTTPS) | Feladat |
-|--------|------------|-----------------|---------|
-| Laptop A — admin (opcionális) | **Observer** | `/observer.php` | Session aktiválás `n-n`, kód / QR |
-| Laptop B — videobíró | **View** (video-ref) | `/view-video.php` | 2–4 élő kamera + REC + replay |
-| Laptop C — pontozó kijelző | **View** (scoreboard) | `/view-scoreboard.php` | AKA/AO nagyban |
-| Telefon(ok) — tatami kamera | **Controller** (camera) | `/controller-camera.php` | Élő stream → video-ref |
-| Telefon — pontozó | **Controller** (score) | `/controller-score.php` | Pont + következő meccs |
+1. Nyisd: **`/comp/`** — tatami lista (tesztadat).
+2. Válassz tatamit → **desk** (`/comp/tatami.php?id=t1`).
+3. **Session indítás (n-n)** — Observer a deskben; kód megjelenik.
+4. Nyisd a deep linkeket (új ablak / telefon):
+   - Scoreboard TV
+   - Video ref laptop
+   - Score controller telefon
+   - Camera controller telefonok (vagy QR a video-refen)
+5. **Következő indítása** / Start egy küzdelemre — nevek a scoreboardon (host poll).
+6. Pontozás telefonon → TV frissül; desk queue score sync.
+7. Video-ref: REC + Replay 6/10s + 0.5×; **Export 10s** helyi letöltés.
+8. **Következő meccs** a score telefonon → host `next` + 0–0.
 
-**Observer ≠ megjelenítő.** Az Observer csak session/topológia. A kameraképet a **View (video-ref)** mutatja; a pontot a **View (scoreboard)**.
+## Szereposztás
 
-```text
-Observer (indít)
-    │
-    ├─ View video-ref ←── Controller cam ×2–4  (WebRTC)
-    │         └── LocalRecorder + Replay (élő megy tovább)
-    │
-    └─ View scoreboard ←── Controller score     (DataChannel)
-```
+| Eszköz | Szerep | URL |
+|--------|--------|-----|
+| Operátor laptop | Desk + Observer + Video-ref (2. ablak) | `/comp/tatami.php`, `/view-video.php?code=&tatami=` |
+| TV / 2. kijelző | Scoreboard View | `/view-scoreboard.php?code=&tatami=` |
+| Pontozó telefon | Score Controller | `/controller-score.php?code=&tatami=` |
+| 2–4× kamera | Camera Controller | `/controller-camera.php?code=` vagy View QR |
 
-## Indítás (helyszín Wi‑Fi)
+**Observer ≠ megjelenítő.** A desk indítja a sessiont; a kép a video-ref View-n van.
+
+## Hálózat
+
+| Setup | OK? |
+|-------|-----|
+| Laptop **hotspot** — minden eszköz rajta | Igen (internet nem kell) |
+| Terem **Wi‑Fi / LAN** ugyanaz a subnet | Igen |
+| Csak **mobilnet** külön APN-nel | Nem (TURN nélkül) |
+| Kevert Wi‑Fi + mobilnet | Nem |
+
+Indítás a laptopon:
 
 ```bash
-pnpm certs:lan   # egyszer
+pnpm certs:lan          # egyszer
 pnpm dev:lan-signaling
 pnpm --filter @vcc/demo-php run start:lan
 pnpm dev:lan-gateway
 ```
 
-Telefonok / laptopok: **https://\<LAN-IP\>:8443/...** (cert elfogadása).
+Telefon / TV: **https://\<LAN-IP\>:8443/comp/** — cert elfogadása.
 
-## Párosítás forgatókönyv
+`VCC_LAN_IP` állítsd a hotspot / LAN IP-re (scriptek default: `192.168.1.118`).
 
-1. Observer → mode **n-n** → Aktiválás → kód.
-2. Video-ref + scoreboard → ugyanaz a kód → Csatlakozás.
-3. Kamera telefonok: video-ref **QR** (vagy Pair URI) — így a stream a videobíróra megy.
-4. Pontozó telefon: **session kód** → AKA/AO; **Következő meccs** nulláz.
-5. Video-ref: **REC start** (ajánlott az első meccs előtt, ablak ~60s).
-6. Review: **Replay last 6s / 10s** — élő csempék mennek tovább; Close replay.
+## Fixture reset
+
+`/comp/` → **Fixture reset**, vagy `POST /comp/api/bout-action.php` `{ "action": "reset-seed" }`.
+
+Runtime: `apps/demo-php/data/` (gitignore). Seed: `apps/demo-php/fixtures/competition.seed.json`.
 
 ## Mit nem csinálunk most
 
-- kiai.hu mentés / következő meccs a weboldalon
-- SFU / TURN (ha a Wi‑Fi P2P-t engedi; ha nem → TURN később)
-- Per-kamera külön replay fájl (egy közös gyűrűbuffer)
-
-## Gyors checklist a tatamin
-
-- [ ] Mindhárom laptop ugyanazon a Wi‑Fin
-- [ ] HTTPS 8443 nyitva, cert OK telefonon
-- [ ] 2–4 kamera LIVE a video-ref gridben
-- [ ] REC on → replay → élő nem áll meg
-- [ ] Pont azonnal a scoreboardon
-- [ ] Következő meccs → 0–0
+- kiai.hu HTTP
+- TURN / SFU / cloud clip
+- Teljes WKF óra/senshu motor

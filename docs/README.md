@@ -29,7 +29,8 @@
 | [demo-ux.md](demo-ux.md) | **Demó UX/UI terv** |
 | [mvp.md](mvp.md) | Scope + acceptance |
 | [market-notes.md](market-notes.md) | Piac / VAR jegyzet |
-| [competition-week1.md](competition-week1.md) | **Élő versenyteszt** szereposztás + runbook |
+| [competition-week1.md](competition-week1.md) | **Élő versenyteszt** + `/comp/` demó runbook |
+| [competition-source.md](competition-source.md) | Fixture / későbbi kiai.hu adapter szerződés |
 | [security.md](security.md) | **Security first**, titkok, runtime elvek |
 | [open-questions.md](open-questions.md) | Nem blokkoló nyitottak |
 

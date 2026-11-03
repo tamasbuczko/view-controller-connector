@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 $config = require __DIR__ . '/config.php';
+$code = isset($_GET['code']) ? strtoupper(trim((string) $_GET['code'])) : '';
+$tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
 ?><!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -61,6 +63,8 @@ $config = require __DIR__ . '/config.php';
   <?php require __DIR__ . '/partials/importmap.php'; ?>
   <script>
     window.__VCC_CONFIG__ = <?= json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    window.__VCC_AUTO_CODE__ = <?= json_encode($code, JSON_UNESCAPED_UNICODE) ?>;
+    window.__VCC_TATAMI__ = <?= json_encode($tatami, JSON_UNESCAPED_UNICODE) ?>;
   </script>
   <script type="module">
     import { createSession } from "/assets/core/index.js";
@@ -80,6 +84,7 @@ $config = require __DIR__ . '/config.php';
         <button type="button" class="vcc-btn" id="replay10">Replay 10s</button>
         <button type="button" class="vcc-btn secondary" id="slow">0.5×</button>
         <button type="button" class="vcc-btn secondary" id="rate1">1×</button>
+        <button type="button" class="vcc-btn secondary" id="export10">Export 10s</button>
         <button type="button" class="vcc-btn secondary" id="close-replay">Close replay</button>
       </div>`;
 
@@ -87,6 +92,7 @@ $config = require __DIR__ . '/config.php';
     mountView(document.getElementById("app"), session, {
       title: "Video Ref View",
       contentEl: content,
+      autoJoinCode: window.__VCC_AUTO_CODE__ || undefined,
     });
 
     const layout = content.querySelector("#layout");
@@ -114,7 +120,6 @@ $config = require __DIR__ . '/config.php';
         videos.set(e.publicationId, video);
       }
       video.srcObject = e.stream;
-      // Auto-arm ring buffer once first camera is live
       if (!recStarted) {
         recStarted = true;
         void session.startLocalRecording({ windowSeconds: 60 }).catch(() => {
@@ -153,6 +158,23 @@ $config = require __DIR__ . '/config.php';
       layout.classList.remove("reviewing");
     }
 
+    async function exportClip(lastSeconds) {
+      const r = await session.openReplay({ lastSeconds });
+      const el = r.getElement();
+      const src = el?.src;
+      if (!src) {
+        r.close();
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = src;
+      const tatami = window.__VCC_TATAMI__ || "mat";
+      a.download = `vcc-${tatami}-${Date.now()}-${lastSeconds}s.webm`;
+      a.click();
+      // Keep object URL briefly for download, then revoke via close
+      setTimeout(() => r.close(), 1500);
+    }
+
     content.querySelector("#rec-start").onclick = () => {
       recStarted = true;
       void session.startLocalRecording({ windowSeconds: 60 });
@@ -165,6 +187,7 @@ $config = require __DIR__ . '/config.php';
     content.querySelector("#replay10").onclick = () => void openReplay(10);
     content.querySelector("#slow").onclick = () => replay?.setRate(0.5);
     content.querySelector("#rate1").onclick = () => replay?.setRate(1);
+    content.querySelector("#export10").onclick = () => void exportClip(10);
     content.querySelector("#close-replay").onclick = () => closeReplay();
   </script>
 </body>

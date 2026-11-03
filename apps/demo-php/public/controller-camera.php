@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 $config = require __DIR__ . '/config.php';
+$code = isset($_GET['code']) ? strtoupper(trim((string) $_GET['code'])) : '';
+$tatami = isset($_GET['tatami']) ? (string) $_GET['tatami'] : '';
 ?><!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -16,6 +18,8 @@ $config = require __DIR__ . '/config.php';
   <?php require __DIR__ . '/partials/importmap.php'; ?>
   <script>
     window.__VCC_CONFIG__ = <?= json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    window.__VCC_AUTO_CODE__ = <?= json_encode($code, JSON_UNESCAPED_UNICODE) ?>;
+    window.__VCC_TATAMI__ = <?= json_encode($tatami, JSON_UNESCAPED_UNICODE) ?>;
   </script>
   <script type="module">
     import { createSession } from "/assets/core/index.js";
@@ -24,6 +28,7 @@ $config = require __DIR__ . '/config.php';
     mountController(document.getElementById("app"), session, {
       mode: "camera",
       title: "Camera Controller",
+      autoJoinCode: window.__VCC_AUTO_CODE__ || undefined,
     });
   </script>
 </body>
